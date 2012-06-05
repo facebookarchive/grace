@@ -19,15 +19,15 @@ type Handler struct {
 	Handler http.Handler
 }
 
-type Handlers []Handler
+type handlersSlice []Handler
 
 var (
-	verbose                     = flag.Bool("gracehttp.log", true, "Enable logging.")
-	ErrUnexpectedListenersCount = errors.New("unexpected listeners count")
+	verbose           = flag.Bool("gracehttp.log", true, "Enable logging.")
+	errListenersCount = errors.New("unexpected listeners count")
 )
 
 // Creates new listeners for all the given addresses.
-func (handlers Handlers) newListeners() ([]grace.Listener, error) {
+func (handlers handlersSlice) newListeners() ([]grace.Listener, error) {
 	listeners := make([]grace.Listener, len(handlers))
 	for index, pair := range handlers {
 		addr, err := net.ResolveTCPAddr("tcp", pair.Addr)
@@ -45,9 +45,9 @@ func (handlers Handlers) newListeners() ([]grace.Listener, error) {
 }
 
 // Serve on the given listeners and wait for signals.
-func (handlers Handlers) serveWait(listeners []grace.Listener) error {
+func (handlers handlersSlice) serveWait(listeners []grace.Listener) error {
 	if len(handlers) != len(listeners) {
-		return ErrUnexpectedListenersCount
+		return errListenersCount
 	}
 	errch := make(chan error, len(listeners)+1) // listeners + grace.Wait
 	for i, l := range listeners {
@@ -71,11 +71,11 @@ func (handlers Handlers) serveWait(listeners []grace.Listener) error {
 	return <-errch
 }
 
-// Serve will listen on the given address. It will also wait for a
-// SIGUSR2 signal and will restart the server passing the active listener
-// to the new process and avoid dropping active connections.
+// Serve will serve the given pairs of addresses and listeners and
+// will monitor for signals allowing for graceful termination (SIGTERM)
+// or restart (SIGUSR2).
 func Serve(givenHandlers ...Handler) error {
-	handlers := Handlers(givenHandlers)
+	handlers := handlersSlice(givenHandlers)
 	listeners, err := grace.Inherit()
 	if err == nil {
 		err = grace.CloseParent()

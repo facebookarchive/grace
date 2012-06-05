@@ -64,7 +64,7 @@ func (c conn) Close() error {
 	return c.Conn.Close()
 }
 
-// Create a new listener.
+// Wraps an existing File listener to provide a graceful Close() process.
 func NewListener(l Listener) Listener {
 	i := &listener{
 		Listener:     l,
@@ -124,7 +124,7 @@ func (l *listener) Accept() (net.Conn, error) {
 	}, nil
 }
 
-// Wait for signals.
+// Wait for signals to gracefully terminate or restart the process.
 func Wait(listeners []Listener) (err error) {
 	ch := make(chan os.Signal, 2)
 	signal.Notify(ch, syscall.SIGTERM, syscall.SIGUSR2)
@@ -155,7 +155,7 @@ func Wait(listeners []Listener) (err error) {
 	panic("not reached")
 }
 
-// Try to inherit listeners from environment variables.
+// Try to inherit listeners from the parent process.
 func Inherit() (listeners []Listener, err error) {
 	countStr := os.Getenv(envCountKey)
 	if countStr == "" {
@@ -179,12 +179,13 @@ func Inherit() (listeners []Listener, err error) {
 	return
 }
 
-// Start the Close process in the parent.
+// Start the Close process in the parent. This does not wait for the
+// parent to close and simply sends it the TERM signal.
 func CloseParent() error {
 	return syscall.Kill(os.Getppid(), syscall.SIGTERM)
 }
 
-// Restart the process passing it the given listeners.
+// Restart the process passing the given listeners to the new process.
 func Restart(listeners []Listener) (err error) {
 	if len(listeners) == 0 {
 		return errors.New("restart must be given listeners.")
