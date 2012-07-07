@@ -1,0 +1,4 @@
+language: erlang
+
+script:
+ - curl https://raw.github.com/nshah/go.travis/master/install | sh

@@ -1,4 +1,4 @@
-go.grace
+go.grace [![Build Status](https://secure.travis-ci.org/nshah/go.grace.png)](http://travis-ci.org/nshah/go.grace)
 ========
 
 Package grace provides a library that makes it easy to build socket
