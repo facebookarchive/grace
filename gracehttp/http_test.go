@@ -4,8 +4,8 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"github.com/nshah/go.freeport"
-	"github.com/nshah/go.tool"
+	"github.com/daaku/go.freeport"
+	"github.com/daaku/go.tool"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -200,7 +200,7 @@ func (h *harness) Wait() {
 // The main test case.
 func TestComplex(t *testing.T) {
 	h := &harness{
-		ImportPath: "github.com/nshah/go.grace/gracehttp/testserver",
+		ImportPath: "github.com/daaku/go.grace/gracehttp/testserver",
 		T:          t,
 	}
 	h.Build()

@@ -4,7 +4,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"github.com/nshah/go.grace/gracehttp"
+	"github.com/daaku/go.grace/gracehttp"
 	"log"
 	"net/http"
 	"os"
