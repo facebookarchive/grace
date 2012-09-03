@@ -25,7 +25,7 @@ var (
 
 const (
 	// Used to indicate a graceful restart in the new process.
-	envCountKey = "GRACE"
+	envCountKey = "LISTEN_FDS"
 
 	// The error returned by the standard library when the socket is closed.
 	errClosed = "use of closed network connection"
@@ -132,6 +132,9 @@ func Wait(listeners []Listener) (err error) {
 		sig := <-ch
 		switch sig {
 		case syscall.SIGTERM:
+			if os.Getppid() == 1 { // init provided sockets dont close
+				return
+			}
 			var wg sync.WaitGroup
 			wg.Add(len(listeners))
 			for _, l := range listeners {
@@ -182,7 +185,11 @@ func Inherit() (listeners []Listener, err error) {
 // Start the Close process in the parent. This does not wait for the
 // parent to close and simply sends it the TERM signal.
 func CloseParent() error {
-	return syscall.Kill(os.Getppid(), syscall.SIGTERM)
+	ppid := os.Getppid()
+	if ppid == 1 { // init provided sockets, for example systemd
+		return nil
+	}
+	return syscall.Kill(ppid, syscall.SIGTERM)
 }
 
 // Restart the process passing the given listeners to the new process.

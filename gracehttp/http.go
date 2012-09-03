@@ -83,9 +83,14 @@ func Serve(givenHandlers ...Handler) error {
 			return fmt.Errorf("Failed to close parent: %s", err)
 		}
 		if *verbose {
-			log.Printf(
-				"Graceful handoff of %s with new pid %d and old pid %d.",
-				pprintAddr(listeners), os.Getpid(), os.Getppid())
+			ppid := os.Getppid()
+			if ppid == 1 {
+				log.Printf("Listening on init activated %s", pprintAddr(listeners))
+			} else {
+				log.Printf(
+					"Graceful handoff of %s with new pid %d and old pid %d.",
+					pprintAddr(listeners), os.Getpid(), ppid)
+			}
 		}
 	} else if err == grace.ErrNotInheriting {
 		listeners, err = handlers.newListeners()
@@ -103,7 +108,7 @@ func Serve(givenHandlers ...Handler) error {
 		return err
 	}
 	if *verbose {
-		return fmt.Errorf("Exiting pid %d.", os.Getpid())
+		log.Printf("Exiting pid %d.", os.Getpid())
 	}
 	return nil
 }
