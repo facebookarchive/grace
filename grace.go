@@ -133,7 +133,7 @@ func Wait(listeners []Listener) (err error) {
 		switch sig {
 		case syscall.SIGTERM:
 			if os.Getppid() == 1 { // init provided sockets dont close
-				return
+				return nil
 			}
 			var wg sync.WaitGroup
 			wg.Add(len(listeners))
