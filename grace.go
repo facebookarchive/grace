@@ -35,10 +35,18 @@ const (
 	dec = false
 )
 
+// A FileListener is a file backed net.Listener.
+type FileListener interface {
+	net.Listener
+
+	// Will return the underlying file representing this Listener.
+	File() (f *os.File, err error)
+}
+
 // A Listener providing a graceful Close process and can be sent
 // across processes using the underlying File descriptor.
 type Listener interface {
-	net.Listener
+	FileListener
 
 	// Will indicate that a Close is requested preventing further Accept. It will
 	// also wait for the active connections to be terminated before returning.
@@ -46,17 +54,6 @@ type Listener interface {
 	// public API for cases where the socket must not be closed (such as systemd
 	// activation).
 	CloseRequest()
-
-	// Will return the underlying file representing this Listener.
-	File() (f *os.File, err error)
-}
-
-// A FileListener is a file backed net.Listener.
-type FileListener interface {
-	net.Listener
-
-	// Will return the underlying file representing this Listener.
-	File() (f *os.File, err error)
 }
 
 // A goroutine based counter that provides graceful Close for listeners.
