@@ -34,11 +34,13 @@ func newHandler(name string) http.Handler {
 			http.Error(w, err.Error(), 400)
 		}
 		time.Sleep(duration)
-		w.Write([]byte(fmt.Sprintf(
+		fmt.Fprintf(
+			w,
 			"%s started at %s slept for %d nanoseconds.\n",
 			name,
 			now,
-			duration.Nanoseconds())))
+			duration.Nanoseconds(),
+		)
 	})
 	return mux
 }
