@@ -42,6 +42,9 @@ type Listener interface {
 
 	// Will indicate that a Close is requested preventing further Accept. It will
 	// also wait for the active connections to be terminated before returning.
+	// Note, this won't actually do the close, and is provided as part of the
+	// public API for cases where the socket must not be closed (such as systemd
+	// activation).
 	CloseRequest()
 
 	// Will return the underlying file representing this Listener.

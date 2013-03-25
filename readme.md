@@ -9,7 +9,7 @@ Demo HTTP Server with graceful termination and restart:
 https://github.com/daaku/go.grace/blob/master/gracedemo/demo.go
 
 http level graceful termination and restart:
-http://go.pkgdoc.org/github.com/daaku/go.grace/gracehttp
+http://godoc.org/github.com/daaku/go.grace/gracehttp
 
 net.Listener level graceful termination and restart:
-http://go.pkgdoc.org/github.com/daaku/go.grace
+http://godoc.org/github.com/daaku/go.grace
