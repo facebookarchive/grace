@@ -33,6 +33,7 @@ func newHandler(name string) http.Handler {
 		duration, err := time.ParseDuration(r.FormValue("duration"))
 		if err != nil {
 			http.Error(w, err.Error(), 400)
+			return
 		}
 		time.Sleep(duration)
 		fmt.Fprintf(
