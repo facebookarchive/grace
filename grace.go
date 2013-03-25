@@ -40,13 +40,23 @@ const (
 type Listener interface {
 	net.Listener
 
+	// Will indicate that a Close is requested preventing further Accept. It will
+	// also wait for the active connections to be terminated before returning.
+	CloseRequest()
+
 	// Will return the underlying file representing this Listener.
+	File() (f *os.File, err error)
+}
+
+// A realListener is a real file backed net.Listener.
+type realListener interface {
+	net.Listener
 	File() (f *os.File, err error)
 }
 
 // A goroutine based counter that provides graceful Close for listeners.
 type listener struct {
-	Listener
+	realListener
 	closed       bool      // Indicates we're already closed.
 	closeRequest chan bool // Send a bool here to indicate we want to Close.
 	allClosed    chan bool // Receive from here will indicate a clean Close.
@@ -65,9 +75,9 @@ func (c conn) Close() error {
 }
 
 // Wraps an existing File listener to provide a graceful Close() process.
-func NewListener(l Listener) Listener {
+func NewListener(l realListener) Listener {
 	i := &listener{
-		Listener:     l,
+		realListener: l,
 		closeRequest: make(chan bool),
 		allClosed:    make(chan bool),
 		counter:      make(chan bool),
@@ -97,20 +107,24 @@ func (l *listener) enabler() {
 	}
 }
 
-func (l *listener) Close() error {
+func (l *listener) CloseRequest() {
 	if l.closed == true {
-		return nil
+		return
 	}
 	l.closeRequest <- true
 	<-l.allClosed
-	return l.Listener.Close()
+}
+
+func (l *listener) Close() error {
+	l.CloseRequest()
+	return l.realListener.Close()
 }
 
 func (l *listener) Accept() (net.Conn, error) {
 	if l.closed == true {
 		return nil, ErrAlreadyClosed
 	}
-	c, err := l.Listener.Accept()
+	c, err := l.realListener.Accept()
 	if err != nil {
 		if strings.HasSuffix(err.Error(), errClosed) {
 			return nil, ErrAlreadyClosed
@@ -132,16 +146,17 @@ func Wait(listeners []Listener) (err error) {
 		sig := <-ch
 		switch sig {
 		case syscall.SIGTERM:
-			if os.Getppid() == 1 { // init provided sockets dont close
-				return nil
-			}
 			var wg sync.WaitGroup
 			wg.Add(len(listeners))
 			for _, l := range listeners {
 				go func(l Listener) {
-					cErr := l.Close()
-					if cErr != nil {
-						err = cErr
+					if os.Getppid() == 1 { // init provided sockets dont actually close
+						l.CloseRequest()
+					} else {
+						cErr := l.Close()
+						if cErr != nil {
+							err = cErr
+						}
 					}
 					wg.Done()
 				}(l)

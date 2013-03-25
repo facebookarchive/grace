@@ -24,7 +24,16 @@ const (
 	// The amount of time for the long HTTP request. This should be
 	// bigger than the value above.
 	slowHttpWait = time.Second * 4
+
+	// Debug logging.
+	debugLog = false
 )
+
+func debug(format string, a ...interface{}) {
+	if debugLog {
+		println(fmt.Sprintf(format, a...))
+	}
+}
 
 // The response from the test server.
 type response struct {
@@ -162,6 +171,7 @@ func (h *harness) RemoveExe() {
 
 // Helper for sending a single request.
 func (h *harness) SendOne(duration time.Duration, addr string, pid int) {
+	debug("Send One pid=%d duration=%s", pid, duration)
 	client := &http.Client{
 		Transport: &http.Transport{DisableKeepAlives: true},
 	}
@@ -179,6 +189,7 @@ func (h *harness) SendOne(duration time.Duration, addr string, pid int) {
 	if pid != res.Pid {
 		h.T.Fatalf("Didn't get expected pid %d instead got %d", pid, res.Pid)
 	}
+	debug("Request Done pid=%d duration=%s", pid, duration)
 	h.RequestWaitGroup.Done()
 }
 
@@ -186,6 +197,7 @@ func (h *harness) SendOne(duration time.Duration, addr string, pid int) {
 func (h *harness) SendRequest() {
 	pid := h.MostRecentProcess().Pid
 	for _, addr := range h.Addr {
+		debug("Added 2 Requests")
 		h.RequestWaitGroup.Add(2)
 		go h.SendOne(time.Second*0, addr, pid)
 		go h.SendOne(slowHttpWait, addr, pid)
@@ -199,21 +211,35 @@ func (h *harness) Wait() {
 
 // The main test case.
 func TestComplex(t *testing.T) {
+	debug("Started TestComplex")
 	h := &harness{
 		ImportPath: "github.com/daaku/go.grace/gracehttp/testserver",
 		T:          t,
 	}
+	debug("Building")
 	h.Build()
+	debug("Initial Start")
 	h.Start()
+	debug("Send Request 1")
 	h.SendRequest()
+	debug("Sleeping 1")
 	time.Sleep(processWait)
+	debug("Restart 1")
 	h.Restart()
+	debug("Send Request 2")
 	h.SendRequest()
+	debug("Sleeping 2")
 	time.Sleep(processWait)
+	debug("Restart 2")
 	h.Restart()
+	debug("Send Request 3")
 	h.SendRequest()
+	debug("Sleeping 3")
 	time.Sleep(processWait)
+	debug("Stopping")
 	h.Stop()
+	debug("Waiting")
 	h.Wait()
+	debug("Removing Executable")
 	h.RemoveExe()
 }

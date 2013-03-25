@@ -24,15 +24,22 @@ var (
 
 func main() {
 	flag.Parse()
-	err := json.NewEncoder(os.Stderr).Encode(&response{Pid: os.Getpid()})
+	err := flag.Set("gracehttp.log", "false")
+	if err != nil {
+		log.Fatalf("Error setting gracehttp.log: %s", err)
+	}
+	err = json.NewEncoder(os.Stderr).Encode(&response{Pid: os.Getpid()})
 	if err != nil {
 		log.Fatalf("Error writing startup json: %s", err)
 	}
-	gracehttp.Serve(
+	err = gracehttp.Serve(
 		gracehttp.Handler{*address0, newHandler()},
 		gracehttp.Handler{*address1, newHandler()},
 		gracehttp.Handler{*address2, newHandler()},
 	)
+	if err != nil {
+		log.Fatalf("Error in gracehttp.Serve: %s", err)
+	}
 }
 
 func newHandler() http.Handler {
