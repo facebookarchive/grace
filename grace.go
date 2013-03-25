@@ -51,15 +51,17 @@ type Listener interface {
 	File() (f *os.File, err error)
 }
 
-// A realListener is a real file backed net.Listener.
-type realListener interface {
+// A FileListener is a file backed net.Listener.
+type FileListener interface {
 	net.Listener
+
+	// Will return the underlying file representing this Listener.
 	File() (f *os.File, err error)
 }
 
 // A goroutine based counter that provides graceful Close for listeners.
 type listener struct {
-	realListener
+	FileListener
 	closed       bool      // Indicates we're already closed.
 	closeRequest chan bool // Send a bool here to indicate we want to Close.
 	allClosed    chan bool // Receive from here will indicate a clean Close.
@@ -78,9 +80,9 @@ func (c conn) Close() error {
 }
 
 // Wraps an existing File listener to provide a graceful Close() process.
-func NewListener(l realListener) Listener {
+func NewListener(l FileListener) Listener {
 	i := &listener{
-		realListener: l,
+		FileListener: l,
 		closeRequest: make(chan bool),
 		allClosed:    make(chan bool),
 		counter:      make(chan bool),
@@ -120,14 +122,14 @@ func (l *listener) CloseRequest() {
 
 func (l *listener) Close() error {
 	l.CloseRequest()
-	return l.realListener.Close()
+	return l.FileListener.Close()
 }
 
 func (l *listener) Accept() (net.Conn, error) {
 	if l.closed == true {
 		return nil, ErrAlreadyClosed
 	}
-	c, err := l.realListener.Accept()
+	c, err := l.FileListener.Accept()
 	if err != nil {
 		if strings.HasSuffix(err.Error(), errClosed) {
 			return nil, ErrAlreadyClosed
