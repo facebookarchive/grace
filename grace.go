@@ -59,7 +59,6 @@ type Listener interface {
 // A goroutine based counter that provides graceful Close for listeners.
 type listener struct {
 	FileListener
-	closed       bool      // Indicates we're already closed.
 	closeRequest chan bool // Send a bool here to indicate we want to Close.
 	allClosed    chan bool // Receive from here will indicate a clean Close.
 	counter      chan bool // Use the inc/dec counters.
@@ -94,7 +93,7 @@ func (l *listener) enabler() {
 	for {
 		select {
 		case <-l.closeRequest:
-			l.closed = true
+			l.closeRequest = nil
 		case change = <-l.counter:
 			if change == inc {
 				counter++
@@ -102,19 +101,20 @@ func (l *listener) enabler() {
 				counter--
 			}
 		}
-		if l.closed && counter == 0 {
-			l.allClosed <- true
+		if l.closeRequest == nil && counter == 0 {
+			close(l.allClosed)
 			break
 		}
 	}
 }
 
 func (l *listener) CloseRequest() {
-	if l.closed == true {
+	select {
+	case l.closeRequest <- true:
+		<-l.allClosed
+	case <-l.allClosed:
 		return
 	}
-	l.closeRequest <- true
-	<-l.allClosed
 }
 
 func (l *listener) Close() error {
@@ -123,21 +123,23 @@ func (l *listener) Close() error {
 }
 
 func (l *listener) Accept() (net.Conn, error) {
-	if l.closed == true {
+	select {
+	case <-l.allClosed:
 		return nil, ErrAlreadyClosed
-	}
-	c, err := l.FileListener.Accept()
-	if err != nil {
-		if strings.HasSuffix(err.Error(), errClosed) {
-			return nil, ErrAlreadyClosed
+	default:
+		c, err := l.FileListener.Accept()
+		if err != nil {
+			if strings.HasSuffix(err.Error(), errClosed) {
+				return nil, ErrAlreadyClosed
+			}
+			return nil, err
 		}
-		return nil, err
+		l.counter <- inc
+		return conn{
+			Conn:    c,
+			counter: l.counter,
+		}, nil
 	}
-	l.counter <- inc
-	return conn{
-		Conn:    c,
-		counter: l.counter,
-	}, nil
 }
 
 // Wait for signals to gracefully terminate or restart the process.
