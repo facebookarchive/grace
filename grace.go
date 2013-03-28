@@ -103,6 +103,7 @@ func (l *listener) enabler() {
 		}
 		if l.closeRequest == nil && counter == 0 {
 			close(l.allClosed)
+			close(l.counter)
 			break
 		}
 	}
