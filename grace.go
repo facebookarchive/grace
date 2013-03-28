@@ -141,6 +141,7 @@ func (l *listener) Accept() (net.Conn, error) {
 			counter: l.counter,
 		}, nil
 	}
+	panic("not reached")
 }
 
 // Wait for signals to gracefully terminate or restart the process.
