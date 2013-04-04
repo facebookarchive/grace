@@ -135,11 +135,16 @@ func (l *listener) Accept() (net.Conn, error) {
 			}
 			return nil, err
 		}
-		l.counter <- inc
-		return conn{
-			Conn:    c,
-			counter: l.counter,
-		}, nil
+		select {
+		case <-l.allClosed:
+			c.Close()
+			return nil, ErrAlreadyClosed
+		case l.counter <- inc:
+			return conn{
+				Conn:    c,
+				counter: l.counter,
+			}, nil
+		}
 	}
 	panic("not reached")
 }
