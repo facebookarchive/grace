@@ -33,9 +33,9 @@ func main() {
 		log.Fatalf("Error writing startup json: %s", err)
 	}
 	err = gracehttp.Serve(
-		gracehttp.Handler{*address0, newHandler()},
-		gracehttp.Handler{*address1, newHandler()},
-		gracehttp.Handler{*address2, newHandler()},
+		&http.Server{Addr: *address0, Handler: newHandler()},
+		&http.Server{Addr: *address1, Handler: newHandler()},
+		&http.Server{Addr: *address2, Handler: newHandler()},
 	)
 	if err != nil {
 		log.Fatalf("Error in gracehttp.Serve: %s", err)

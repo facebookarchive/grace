@@ -14,12 +14,7 @@ import (
 	"os"
 )
 
-type Handler struct {
-	Addr    string
-	Handler http.Handler
-}
-
-type handlersSlice []Handler
+type serverSlice []*http.Server
 
 var (
 	verbose           = flag.Bool("gracehttp.log", true, "Enable logging.")
@@ -27,9 +22,9 @@ var (
 )
 
 // Creates new listeners for all the given addresses.
-func (handlers handlersSlice) newListeners() ([]grace.Listener, error) {
-	listeners := make([]grace.Listener, len(handlers))
-	for index, pair := range handlers {
+func (servers serverSlice) newListeners() ([]grace.Listener, error) {
+	listeners := make([]grace.Listener, len(servers))
+	for index, pair := range servers {
 		addr, err := net.ResolveTCPAddr("tcp", pair.Addr)
 		if err != nil {
 			return nil, fmt.Errorf(
@@ -45,14 +40,14 @@ func (handlers handlersSlice) newListeners() ([]grace.Listener, error) {
 }
 
 // Serve on the given listeners and wait for signals.
-func (handlers handlersSlice) serveWait(listeners []grace.Listener) error {
-	if len(handlers) != len(listeners) {
+func (servers serverSlice) serveWait(listeners []grace.Listener) error {
+	if len(servers) != len(listeners) {
 		return errListenersCount
 	}
 	errch := make(chan error, len(listeners)+1) // listeners + grace.Wait
 	for i, l := range listeners {
 		go func(i int, l net.Listener) {
-			err := http.Serve(l, handlers[i].Handler)
+			err := servers[i].Serve(l)
 			// The underlying Accept() will return grace.ErrAlreadyClosed
 			// when a signal to do the same is returned, which we are okay with.
 			if err != nil && err != grace.ErrAlreadyClosed {
@@ -74,8 +69,8 @@ func (handlers handlersSlice) serveWait(listeners []grace.Listener) error {
 // Serve will serve the given pairs of addresses and listeners and
 // will monitor for signals allowing for graceful termination (SIGTERM)
 // or restart (SIGUSR2).
-func Serve(givenHandlers ...Handler) error {
-	handlers := handlersSlice(givenHandlers)
+func Serve(servers ...*http.Server) error {
+	sslice := serverSlice(servers)
 	listeners, err := grace.Inherit()
 	if err == nil {
 		err = grace.CloseParent()
@@ -93,7 +88,7 @@ func Serve(givenHandlers ...Handler) error {
 			}
 		}
 	} else if err == grace.ErrNotInheriting {
-		listeners, err = handlers.newListeners()
+		listeners, err = sslice.newListeners()
 		if err != nil {
 			return err
 		}
@@ -103,7 +98,7 @@ func Serve(givenHandlers ...Handler) error {
 	} else {
 		return fmt.Errorf("Failed graceful handoff: %s", err)
 	}
-	err = handlers.serveWait(listeners)
+	err = sslice.serveWait(listeners)
 	if err != nil {
 		return err
 	}
