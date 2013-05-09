@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"time"
 )
 
 type Handler struct {
@@ -24,6 +25,7 @@ type handlersSlice []Handler
 var (
 	verbose           = flag.Bool("gracehttp.log", true, "Enable logging.")
 	errListenersCount = errors.New("unexpected listeners count")
+	readTimeout       = time.Duration(0)
 )
 
 // Creates new listeners for all the given addresses.
@@ -52,7 +54,11 @@ func (handlers handlersSlice) serveWait(listeners []grace.Listener) error {
 	errch := make(chan error, len(listeners)+1) // listeners + grace.Wait
 	for i, l := range listeners {
 		go func(i int, l net.Listener) {
-			err := http.Serve(l, handlers[i].Handler)
+			server := http.Server{
+				Handler:     handlers[i].Handler,
+				ReadTimeout: readTimeout,
+			}
+			err := server.Serve(l)
 			// The underlying Accept() will return grace.ErrAlreadyClosed
 			// when a signal to do the same is returned, which we are okay with.
 			if err != nil && err != grace.ErrAlreadyClosed {
@@ -123,4 +129,11 @@ func pprintAddr(listeners []grace.Listener) []byte {
 		fmt.Fprint(out, l.Addr())
 	}
 	return out.Bytes()
+}
+
+// Sets the read timeout on servers in order to avoid problems
+// with clients that keep connections open for too long
+// (Firefox has a default of 115 seconds for keep-alive).
+func SetReadTimeout(timeout time.Duration) {
+	readTimeout = timeout
 }
