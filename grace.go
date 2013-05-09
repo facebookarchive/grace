@@ -29,10 +29,6 @@ const (
 
 	// The error returned by the standard library when the socket is closed.
 	errClosed = "use of closed network connection"
-
-	// Used for the counter chan.
-	inc = true
-	dec = false
 )
 
 // A FileListener is a file backed net.Listener.
@@ -56,66 +52,35 @@ type Listener interface {
 	CloseRequest()
 }
 
-// A goroutine based counter that provides graceful Close for listeners.
 type listener struct {
 	FileListener
-	closeRequest chan bool // Send a bool here to indicate we want to Close.
-	allClosed    chan bool // Receive from here will indicate a clean Close.
-	counter      chan bool // Use the inc/dec counters.
+	closed      bool
+	closedMutex sync.RWMutex
+	wg          sync.WaitGroup
 }
 
 // Allows for us to notice when the connection is closed.
 type conn struct {
 	net.Conn
-	counter chan bool
+	wg *sync.WaitGroup
 }
 
 func (c conn) Close() error {
-	c.counter <- dec
-	return c.Conn.Close()
+	err := c.Conn.Close()
+	c.wg.Done()
+	return err
 }
 
 // Wraps an existing File listener to provide a graceful Close() process.
 func NewListener(l FileListener) Listener {
-	i := &listener{
-		FileListener: l,
-		closeRequest: make(chan bool),
-		allClosed:    make(chan bool),
-		counter:      make(chan bool),
-	}
-	go i.enabler()
-	return i
-}
-
-func (l *listener) enabler() {
-	var counter uint64
-	var change bool
-	for {
-		select {
-		case <-l.closeRequest:
-			l.closeRequest = nil
-		case change = <-l.counter:
-			if change == inc {
-				counter++
-			} else {
-				counter--
-			}
-		}
-		if l.closeRequest == nil && counter == 0 {
-			close(l.allClosed)
-			close(l.counter)
-			break
-		}
-	}
+	return &listener{FileListener: l}
 }
 
 func (l *listener) CloseRequest() {
-	select {
-	case l.closeRequest <- true:
-		<-l.allClosed
-	case <-l.allClosed:
-		return
-	}
+	l.closedMutex.Lock()
+	l.closed = true
+	l.closedMutex.Unlock()
+	l.wg.Wait()
 }
 
 func (l *listener) Close() error {
@@ -124,29 +89,21 @@ func (l *listener) Close() error {
 }
 
 func (l *listener) Accept() (net.Conn, error) {
-	select {
-	case <-l.allClosed:
-		return nil, ErrAlreadyClosed
-	default:
-		c, err := l.FileListener.Accept()
-		if err != nil {
-			if strings.HasSuffix(err.Error(), errClosed) {
-				return nil, ErrAlreadyClosed
-			}
-			return nil, err
-		}
-		select {
-		case <-l.allClosed:
-			c.Close()
+	c, err := l.FileListener.Accept()
+	if err != nil {
+		if strings.HasSuffix(err.Error(), errClosed) {
 			return nil, ErrAlreadyClosed
-		case l.counter <- inc:
-			return conn{
-				Conn:    c,
-				counter: l.counter,
-			}, nil
 		}
+		return nil, err
 	}
-	panic("not reached")
+	l.closedMutex.RLock()
+	defer l.closedMutex.RUnlock()
+	if l.closed {
+		c.Close()
+		return nil, ErrAlreadyClosed
+	}
+	l.wg.Add(1)
+	return conn{Conn: c, wg: &l.wg}, nil
 }
 
 // Wait for signals to gracefully terminate or restart the process.
