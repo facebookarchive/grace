@@ -54,7 +54,7 @@ Documentation
 -------------
 
 `http.Server` graceful termination and restart:
-http://godoc.org/github.com/daaku/go.grace/gracehttp
+http://gowalker.org/github.com/daaku/go.grace/gracehttp
 
 `net.Listener` graceful termination and restart:
-http://godoc.org/github.com/daaku/go.grace
+http://gowalker.org/github.com/daaku/go.grace
