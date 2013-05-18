@@ -53,8 +53,8 @@ both the new as well as the old server was running at the same time.
 Documentation
 -------------
 
-http level graceful termination and restart:
+`http.Server` graceful termination and restart:
 http://godoc.org/github.com/daaku/go.grace/gracehttp
 
-net.Listener level graceful termination and restart:
+`net.Listener` graceful termination and restart:
 http://godoc.org/github.com/daaku/go.grace
