@@ -48,6 +48,7 @@ type harness struct {
 	ExeName          string         // The temp binary from the build.
 	Addr             []string       // The addresses for the http servers.
 	Process          []*os.Process  // The server commands, oldest to newest.
+	ProcessMutex     sync.Mutex     // The mutex to guard Process manipulation.
 	RequestWaitGroup sync.WaitGroup // The wait group for the HTTP requests.
 	newProcess       chan bool      // A bool is sent on restart.
 }
@@ -121,7 +122,9 @@ func (h *harness) Start() {
 			if err != nil {
 				h.T.Fatalf("Could not find process with pid: %d", res.Pid)
 			}
+			h.ProcessMutex.Lock()
 			h.Process = append(h.Process, process)
+			h.ProcessMutex.Unlock()
 			h.newProcess <- true
 		}
 	}()
@@ -129,7 +132,9 @@ func (h *harness) Start() {
 	if err != nil {
 		h.T.Fatalf("Failed to start command: %s", err)
 	}
+	h.ProcessMutex.Lock()
 	h.Process = append(h.Process, cmd.Process)
+	h.ProcessMutex.Unlock()
 	<-h.newProcess
 	time.Sleep(processWait)
 }
@@ -154,6 +159,8 @@ func (h *harness) Stop() {
 
 // Returns the most recent server process.
 func (h *harness) MostRecentProcess() *os.Process {
+	h.ProcessMutex.Lock()
+	defer h.ProcessMutex.Unlock()
 	l := len(h.Process)
 	if l == 0 {
 		h.T.Fatalf("Most recent command requested before command was created.")
