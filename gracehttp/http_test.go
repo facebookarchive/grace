@@ -3,6 +3,7 @@ package gracehttp_test
 import (
 	"bufio"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"github.com/daaku/go.freeport"
 	"github.com/daaku/go.tool"
@@ -24,13 +25,13 @@ const (
 	// The amount of time for the long HTTP request. This should be
 	// bigger than the value above.
 	slowHttpWait = time.Second * 4
-
-	// Debug logging.
-	debugLog = false
 )
 
+// Debug logging.
+var debugLog = flag.Bool("debug", false, "enable debug logging")
+
 func debug(format string, a ...interface{}) {
-	if debugLog {
+	if *debugLog {
 		println(fmt.Sprintf(format, a...))
 	}
 }
