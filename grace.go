@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 )
 
 var (
@@ -21,6 +22,9 @@ var (
 
 	// This error is returned by Listener.Accept() when Close is in progress.
 	ErrAlreadyClosed = errors.New("already closed")
+
+	// Time in the past to trigger immediate deadline.
+	timeInPast = time.Date(1983, time.November, 6, 0, 0, 0, 0, time.UTC)
 )
 
 const (
@@ -31,29 +35,17 @@ const (
 	errClosed = "use of closed network connection"
 )
 
-// A FileListener is a file backed net.Listener.
-type FileListener interface {
+// A Listener providing a graceful Close process and can be sent
+// across processes using the underlying File descriptor.
+type Listener interface {
 	net.Listener
 
 	// Will return the underlying file representing this Listener.
 	File() (f *os.File, err error)
 }
 
-// A Listener providing a graceful Close process and can be sent
-// across processes using the underlying File descriptor.
-type Listener interface {
-	FileListener
-
-	// Will indicate that a Close is requested preventing further Accept. It will
-	// also wait for the active connections to be terminated before returning.
-	// Note, this won't actually do the close, and is provided as part of the
-	// public API for cases where the socket must not be closed (such as systemd
-	// activation).
-	CloseRequest()
-}
-
 type listener struct {
-	FileListener
+	Listener
 	closed      bool
 	closedMutex sync.RWMutex
 	wg          sync.WaitGroup
@@ -72,35 +64,59 @@ func (c conn) Close() error {
 }
 
 // Wraps an existing File listener to provide a graceful Close() process.
-func NewListener(l FileListener) Listener {
-	return &listener{FileListener: l}
-}
-
-func (l *listener) CloseRequest() {
-	l.closedMutex.Lock()
-	l.closed = true
-	l.closedMutex.Unlock()
-	l.wg.Wait()
+func NewListener(l Listener) Listener {
+	return &listener{Listener: l}
 }
 
 func (l *listener) Close() error {
-	l.CloseRequest()
-	return l.FileListener.Close()
+	l.closedMutex.Lock()
+	l.closed = true
+	l.closedMutex.Unlock()
+
+	var err error
+	// Init provided sockets dont actually close so we trigger Accept to return
+	// by setting the deadline.
+	if os.Getppid() == 1 {
+		if ld, ok := l.Listener.(interface {
+			SetDeadline(t time.Time) error
+		}); ok {
+			ld.SetDeadline(timeInPast)
+		} else {
+			fmt.Fprintln(os.Stderr, "init activated server did not have SetDeadline")
+		}
+	} else {
+		err = l.Listener.Close()
+	}
+	l.wg.Wait()
+	return err
 }
 
 func (l *listener) Accept() (net.Conn, error) {
-	c, err := l.FileListener.Accept()
+	l.closedMutex.RLock()
+	if l.closed {
+		l.closedMutex.RUnlock()
+		return nil, ErrAlreadyClosed
+	}
+	l.closedMutex.RUnlock()
+
+	c, err := l.Listener.Accept()
 	if err != nil {
 		if strings.HasSuffix(err.Error(), errClosed) {
 			return nil, ErrAlreadyClosed
 		}
+
+		// We use SetDeadline above to trigger Accept to return when we're trying
+		// to handoff to a child as part of our restart process. In this scenario
+		// we want to tread the timeout the same as a Close.
+		if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
+			l.closedMutex.RLock()
+			if l.closed {
+				l.closedMutex.RUnlock()
+				return nil, ErrAlreadyClosed
+			}
+			l.closedMutex.RUnlock()
+		}
 		return nil, err
-	}
-	l.closedMutex.RLock()
-	defer l.closedMutex.RUnlock()
-	if l.closed {
-		c.Close()
-		return nil, ErrAlreadyClosed
 	}
 	l.wg.Add(1)
 	return conn{Conn: c, wg: &l.wg}, nil
@@ -118,13 +134,9 @@ func Wait(listeners []Listener) (err error) {
 			wg.Add(len(listeners))
 			for _, l := range listeners {
 				go func(l Listener) {
-					if os.Getppid() == 1 { // init provided sockets dont actually close
-						l.CloseRequest()
-					} else {
-						cErr := l.Close()
-						if cErr != nil {
-							err = cErr
-						}
+					cErr := l.Close()
+					if cErr != nil {
+						err = cErr
 					}
 					wg.Done()
 				}(l)
