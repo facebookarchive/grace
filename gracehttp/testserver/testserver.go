@@ -25,9 +25,17 @@ type response struct {
 func wait(wg *sync.WaitGroup, url string) {
 	defer wg.Done()
 	for {
-		_, err := http.Get(url)
+		res, err := http.Get(url)
 		if err == nil {
-			return
+			// ensure it isn't a response from a previous instance
+			defer res.Body.Close()
+			var r response
+			if err := json.NewDecoder(res.Body).Decode(&r); err != nil {
+				log.Fatal("Error decoding json: %s", err)
+			}
+			if r.Pid == os.Getpid() {
+				return
+			}
 		} else {
 			// we expect connection refused
 			if !strings.HasSuffix(err.Error(), "connection refused") {
