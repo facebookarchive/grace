@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,7 +19,7 @@ import (
 type response struct {
 	Sleep time.Duration
 	Pid   int
-	Error string `json:,omitempty`
+	Error string `json:",omitempty"`
 }
 
 func wait(wg *sync.WaitGroup, url string) {
@@ -28,12 +29,15 @@ func wait(wg *sync.WaitGroup, url string) {
 		if err == nil {
 			return
 		} else {
-			e2 := json.NewEncoder(os.Stderr).Encode(&response{
-				Error: err.Error(),
-				Pid:   os.Getpid(),
-			})
-			if e2 != nil {
-				log.Fatalf("Error writing error json: %s", e2)
+			// we expect connection refused
+			if !strings.HasSuffix(err.Error(), "connection refused") {
+				e2 := json.NewEncoder(os.Stderr).Encode(&response{
+					Error: err.Error(),
+					Pid:   os.Getpid(),
+				})
+				if e2 != nil {
+					log.Fatalf("Error writing error json: %s", e2)
+				}
 			}
 		}
 	}
