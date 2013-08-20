@@ -2,12 +2,12 @@ package gracehttp_test
 
 import (
 	"bufio"
+	"crypto/tls"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/daaku/go.freeport"
-	"github.com/daaku/go.tool"
 	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -17,6 +17,9 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/daaku/go.freeport"
+	"github.com/daaku/go.tool"
 )
 
 // Debug logging.
@@ -32,6 +35,7 @@ func debug(format string, a ...interface{}) {
 type response struct {
 	Sleep time.Duration
 	Pid   int
+	Error string
 }
 
 // State for the test run.
@@ -39,37 +43,29 @@ type harness struct {
 	T                 *testing.T     // The test instance.
 	ImportPath        string         // The import path for the server command.
 	ExeName           string         // The temp binary from the build.
-	Addr              []string       // The addresses for the http servers.
+	httpAddr          string         // The address for the http server.
+	httpsAddr         string         // The address for the https server.
 	Process           []*os.Process  // The server commands, oldest to newest.
 	ProcessMutex      sync.Mutex     // The mutex to guard Process manipulation.
 	RequestWaitGroup  sync.WaitGroup // The wait group for the HTTP requests.
-	newProcess        chan bool      // A bool is sent on restart.
+	newProcess        chan bool      // A bool is sent on start/restart.
 	requestCount      int
 	requestCountMutex sync.Mutex
 }
 
 // Find 3 free ports and setup addresses.
 func (h *harness) SetupAddr() {
-	for i := 3; i > 0; i-- {
-		port, err := freeport.Get()
-		if err != nil {
-			h.T.Fatalf("Failed to find a free port: %s", err)
-		}
-		h.Addr = append(h.Addr, fmt.Sprintf("127.0.0.1:%d", port))
+	port, err := freeport.Get()
+	if err != nil {
+		h.T.Fatalf("Failed to find a free port: %s", err)
 	}
-}
+	h.httpAddr = fmt.Sprintf("127.0.0.1:%d", port)
 
-// Builds the command line arguments.
-func (h *harness) Args() []string {
-	if h.Addr == nil {
-		h.SetupAddr()
+	port, err = freeport.Get()
+	if err != nil {
+		h.T.Fatalf("Failed to find a free port: %s", err)
 	}
-	return []string{
-		"-gracehttp.log=false",
-		"-a0", h.Addr[0],
-		"-a1", h.Addr[1],
-		"-a2", h.Addr[2],
-	}
+	h.httpsAddr = fmt.Sprintf("127.0.0.1:%d", port)
 }
 
 // Builds the command.
@@ -93,26 +89,30 @@ func (h *harness) Build() {
 
 // Start a fresh server and wait for pid updates on restart.
 func (h *harness) Start() {
-	cmd := exec.Command(h.ExeName, h.Args()...)
+	h.SetupAddr()
+	cmd := exec.Command(h.ExeName, "-http", h.httpAddr, "-https", h.httpsAddr)
 	stderr, err := cmd.StderrPipe()
 	go func() {
 		reader := bufio.NewReader(stderr)
 		for {
 			line, isPrefix, err := reader.ReadLine()
 			if err != nil {
-				h.T.Fatalf("Failed to read line from server process: %s", err)
+				log.Fatalf("Failed to read line from server process: %s", err)
 			}
 			if isPrefix {
-				h.T.Fatalf("Deal with isPrefix for line: %s", line)
+				log.Fatalf("Deal with isPrefix for line: %s", line)
 			}
 			res := &response{}
 			err = json.Unmarshal([]byte(line), res)
 			if err != nil {
-				h.T.Fatalf("Could not parse json from stderr %s: %s", line, err)
+				log.Fatalf("Could not parse json from stderr %s: %s", line, err)
+			}
+			if res.Error != "" {
+				println(fmt.Sprintf("Got error from process: %v", res))
 			}
 			process, err := os.FindProcess(res.Pid)
 			if err != nil {
-				h.T.Fatalf("Could not find process with pid: %d", res.Pid)
+				log.Fatalf("Could not find process with pid: %d", res.Pid)
 			}
 			h.ProcessMutex.Lock()
 			h.Process = append(h.Process, process)
@@ -163,7 +163,7 @@ func (h *harness) RemoveExe() {
 	}
 }
 
-// Get the global request count.
+// Get the global request count and increment it.
 func (h *harness) RequestCount() int {
 	h.requestCountMutex.Lock()
 	defer h.requestCountMutex.Unlock()
@@ -173,9 +173,10 @@ func (h *harness) RequestCount() int {
 }
 
 // Helper for sending a single request.
-func (h *harness) SendOne(dialgroup *sync.WaitGroup, duration time.Duration, addr string, pid int) {
+func (h *harness) SendOne(dialgroup *sync.WaitGroup, url string, pid int) {
+	defer h.RequestWaitGroup.Done()
 	count := h.RequestCount()
-	debug("Send %02d pid=%d duration=%s", count, pid, duration)
+	debug("Send %02d pid=%d url=%s", count, pid, url)
 	client := &http.Client{
 		Transport: &http.Transport{
 			DisableKeepAlives: true,
@@ -183,39 +184,46 @@ func (h *harness) SendOne(dialgroup *sync.WaitGroup, duration time.Duration, add
 				defer dialgroup.Done()
 				return net.Dial(network, addr)
 			},
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
 		},
 	}
-	url := fmt.Sprintf("http://%s/sleep/?duration=%s", addr, duration.String())
 	r, err := client.Get(url)
 	if err != nil {
-		h.T.Fatalf("Failed request to %s: %s", url, err)
+		h.T.Fatalf("Failed request %02d to %s pid=%d: %s", count, url, pid, err)
 	}
-	debug("Body %02d pid=%d duration=%s", count, pid, duration)
+	debug("Body %02d pid=%d url=%s", count, pid, url)
 	defer r.Body.Close()
 	res := &response{}
 	err = json.NewDecoder(r.Body).Decode(res)
 	if err != nil {
-		h.T.Fatalf("Failed to ready decode json response body: %s", err)
+		h.T.Fatalf("Failed to ready decode json response body pid=%d: %s", pid, err)
 	}
 	if pid != res.Pid {
 		h.T.Fatalf("Didn't get expected pid %d instead got %d", pid, res.Pid)
 	}
-	debug("Done %02d pid=%d duration=%s", count, pid, duration)
-	h.RequestWaitGroup.Done()
+	debug("Done %02d pid=%d url=%s", count, pid, url)
 }
 
 // Send test HTTP request.
 func (h *harness) SendRequest() {
 	pid := h.MostRecentProcess().Pid
+	httpFastUrl := fmt.Sprintf("http://%s/sleep/?duration=0", h.httpAddr)
+	httpSlowUrl := fmt.Sprintf("http://%s/sleep/?duration=2s", h.httpAddr)
+	httpsFastUrl := fmt.Sprintf("https://%s/sleep/?duration=0", h.httpsAddr)
+	httpsSlowUrl := fmt.Sprintf("https://%s/sleep/?duration=2s", h.httpsAddr)
+
 	var dialgroup sync.WaitGroup
-	for _, addr := range h.Addr {
-		debug("Added 2 Requests")
-		h.RequestWaitGroup.Add(2)
-		dialgroup.Add(2)
-		go h.SendOne(&dialgroup, time.Second*0, addr, pid)
-		go h.SendOne(&dialgroup, time.Second*2, addr, pid)
-	}
+	h.RequestWaitGroup.Add(4)
+	dialgroup.Add(4)
+	go h.SendOne(&dialgroup, httpFastUrl, pid)
+	go h.SendOne(&dialgroup, httpSlowUrl, pid)
+	go h.SendOne(&dialgroup, httpsFastUrl, pid)
+	go h.SendOne(&dialgroup, httpsSlowUrl, pid)
+	debug("Added Requests pid=%d", pid)
 	dialgroup.Wait()
+	debug("Dialed Requests pid=%d", pid)
 }
 
 // Wait for everything.

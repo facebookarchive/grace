@@ -4,14 +4,16 @@ package gracehttp
 
 import (
 	"bytes"
+	"crypto/tls"
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/daaku/go.grace"
 	"log"
 	"net"
 	"net/http"
 	"os"
+
+	"github.com/daaku/go.grace"
 )
 
 type serverSlice []*http.Server
@@ -47,7 +49,12 @@ func (servers serverSlice) serveWait(listeners []grace.Listener) error {
 	errch := make(chan error, len(listeners)+1) // listeners + grace.Wait
 	for i, l := range listeners {
 		go func(i int, l net.Listener) {
-			err := servers[i].Serve(l)
+			server := servers[i]
+			if server.TLSConfig != nil {
+				l = tls.NewListener(l, server.TLSConfig)
+			}
+
+			err := server.Serve(l)
 			// The underlying Accept() will return grace.ErrAlreadyClosed
 			// when a signal to do the same is returned, which we are okay with.
 			if err != nil && err != grace.ErrAlreadyClosed {
