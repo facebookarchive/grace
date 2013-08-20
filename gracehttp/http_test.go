@@ -8,6 +8,7 @@ import (
 	"github.com/daaku/go.freeport"
 	"github.com/daaku/go.tool"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -16,15 +17,6 @@ import (
 	"syscall"
 	"testing"
 	"time"
-)
-
-const (
-	// The amount of time we give a process to become ready.
-	processWait = time.Second * 2
-
-	// The amount of time for the long HTTP request. This should be
-	// bigger than the value above.
-	slowHttpWait = time.Second * 4
 )
 
 // Debug logging.
@@ -44,14 +36,16 @@ type response struct {
 
 // State for the test run.
 type harness struct {
-	T                *testing.T     // The test instance.
-	ImportPath       string         // The import path for the server command.
-	ExeName          string         // The temp binary from the build.
-	Addr             []string       // The addresses for the http servers.
-	Process          []*os.Process  // The server commands, oldest to newest.
-	ProcessMutex     sync.Mutex     // The mutex to guard Process manipulation.
-	RequestWaitGroup sync.WaitGroup // The wait group for the HTTP requests.
-	newProcess       chan bool      // A bool is sent on restart.
+	T                 *testing.T     // The test instance.
+	ImportPath        string         // The import path for the server command.
+	ExeName           string         // The temp binary from the build.
+	Addr              []string       // The addresses for the http servers.
+	Process           []*os.Process  // The server commands, oldest to newest.
+	ProcessMutex      sync.Mutex     // The mutex to guard Process manipulation.
+	RequestWaitGroup  sync.WaitGroup // The wait group for the HTTP requests.
+	newProcess        chan bool      // A bool is sent on restart.
+	requestCount      int
+	requestCountMutex sync.Mutex
 }
 
 // Find 3 free ports and setup addresses.
@@ -99,9 +93,6 @@ func (h *harness) Build() {
 
 // Start a fresh server and wait for pid updates on restart.
 func (h *harness) Start() {
-	if h.newProcess == nil {
-		h.newProcess = make(chan bool)
-	}
 	cmd := exec.Command(h.ExeName, h.Args()...)
 	stderr, err := cmd.StderrPipe()
 	go func() {
@@ -133,11 +124,7 @@ func (h *harness) Start() {
 	if err != nil {
 		h.T.Fatalf("Failed to start command: %s", err)
 	}
-	h.ProcessMutex.Lock()
-	h.Process = append(h.Process, cmd.Process)
-	h.ProcessMutex.Unlock()
 	<-h.newProcess
-	time.Sleep(processWait)
 }
 
 // Restart the most recent server.
@@ -147,7 +134,6 @@ func (h *harness) Restart() {
 		h.T.Fatalf("Failed to send SIGUSR2 and restart process: %s", err)
 	}
 	<-h.newProcess
-	time.Sleep(processWait)
 }
 
 // Graceful termination of the most recent server.
@@ -177,17 +163,34 @@ func (h *harness) RemoveExe() {
 	}
 }
 
+// Get the global request count.
+func (h *harness) RequestCount() int {
+	h.requestCountMutex.Lock()
+	defer h.requestCountMutex.Unlock()
+	c := h.requestCount
+	h.requestCount++
+	return c
+}
+
 // Helper for sending a single request.
-func (h *harness) SendOne(duration time.Duration, addr string, pid int) {
-	debug("Send One pid=%d duration=%s", pid, duration)
+func (h *harness) SendOne(dialgroup *sync.WaitGroup, duration time.Duration, addr string, pid int) {
+	count := h.RequestCount()
+	debug("Send %02d pid=%d duration=%s", count, pid, duration)
 	client := &http.Client{
-		Transport: &http.Transport{DisableKeepAlives: true},
+		Transport: &http.Transport{
+			DisableKeepAlives: true,
+			Dial: func(network, addr string) (net.Conn, error) {
+				defer dialgroup.Done()
+				return net.Dial(network, addr)
+			},
+		},
 	}
 	url := fmt.Sprintf("http://%s/sleep/?duration=%s", addr, duration.String())
 	r, err := client.Get(url)
 	if err != nil {
 		h.T.Fatalf("Failed request to %s: %s", url, err)
 	}
+	debug("Body %02d pid=%d duration=%s", count, pid, duration)
 	defer r.Body.Close()
 	res := &response{}
 	err = json.NewDecoder(r.Body).Decode(res)
@@ -197,19 +200,22 @@ func (h *harness) SendOne(duration time.Duration, addr string, pid int) {
 	if pid != res.Pid {
 		h.T.Fatalf("Didn't get expected pid %d instead got %d", pid, res.Pid)
 	}
-	debug("Request Done pid=%d duration=%s", pid, duration)
+	debug("Done %02d pid=%d duration=%s", count, pid, duration)
 	h.RequestWaitGroup.Done()
 }
 
 // Send test HTTP request.
 func (h *harness) SendRequest() {
 	pid := h.MostRecentProcess().Pid
+	var dialgroup sync.WaitGroup
 	for _, addr := range h.Addr {
 		debug("Added 2 Requests")
 		h.RequestWaitGroup.Add(2)
-		go h.SendOne(time.Second*0, addr, pid)
-		go h.SendOne(slowHttpWait, addr, pid)
+		dialgroup.Add(2)
+		go h.SendOne(&dialgroup, time.Second*0, addr, pid)
+		go h.SendOne(&dialgroup, time.Second*2, addr, pid)
 	}
+	dialgroup.Wait()
 }
 
 // Wait for everything.
@@ -223,6 +229,7 @@ func TestComplex(t *testing.T) {
 	h := &harness{
 		ImportPath: "github.com/daaku/go.grace/gracehttp/testserver",
 		T:          t,
+		newProcess: make(chan bool),
 	}
 	debug("Building")
 	h.Build()
@@ -230,24 +237,18 @@ func TestComplex(t *testing.T) {
 	h.Start()
 	debug("Send Request 1")
 	h.SendRequest()
-	debug("Sleeping 1")
-	time.Sleep(processWait)
 	debug("Restart 1")
 	h.Restart()
 	debug("Send Request 2")
 	h.SendRequest()
-	debug("Sleeping 2")
-	time.Sleep(processWait)
 	debug("Restart 2")
 	h.Restart()
 	debug("Send Request 3")
 	h.SendRequest()
-	debug("Sleeping 3")
-	time.Sleep(processWait)
-	debug("Stopping")
-	h.Stop()
 	debug("Waiting")
 	h.Wait()
+	debug("Stopping")
+	h.Stop()
 	debug("Removing Executable")
 	h.RemoveExe()
 }

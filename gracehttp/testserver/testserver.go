@@ -20,19 +20,11 @@ var (
 	address0 = flag.String("a0", ":48567", "Zero address to bind to.")
 	address1 = flag.String("a1", ":48568", "First address to bind to.")
 	address2 = flag.String("a2", ":48569", "Second address to bind to.")
+	finished = make(chan bool)
 )
 
-func main() {
-	flag.Parse()
-	err := flag.Set("gracehttp.log", "false")
-	if err != nil {
-		log.Fatalf("Error setting gracehttp.log: %s", err)
-	}
-	err = json.NewEncoder(os.Stderr).Encode(&response{Pid: os.Getpid()})
-	if err != nil {
-		log.Fatalf("Error writing startup json: %s", err)
-	}
-	err = gracehttp.Serve(
+func serve() {
+	err := gracehttp.Serve(
 		&http.Server{Addr: *address0, Handler: newHandler()},
 		&http.Server{Addr: *address1, Handler: newHandler()},
 		&http.Server{Addr: *address2, Handler: newHandler()},
@@ -40,6 +32,24 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error in gracehttp.Serve: %s", err)
 	}
+	finished <- true
+}
+
+func main() {
+	flag.Parse()
+	err := flag.Set("gracehttp.log", "false")
+	if err != nil {
+		log.Fatalf("Error setting gracehttp.log: %s", err)
+	}
+
+	go serve()
+	time.Sleep(time.Second * 2) // BUG
+
+	err = json.NewEncoder(os.Stderr).Encode(&response{Pid: os.Getpid()})
+	if err != nil {
+		log.Fatalf("Error writing startup json: %s", err)
+	}
+	<-finished
 }
 
 func newHandler() http.Handler {
