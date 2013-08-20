@@ -107,7 +107,7 @@ func (l *listener) Accept() (net.Conn, error) {
 
 		// We use SetDeadline above to trigger Accept to return when we're trying
 		// to handoff to a child as part of our restart process. In this scenario
-		// we want to tread the timeout the same as a Close.
+		// we want to treat the timeout the same as a Close.
 		if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
 			l.closedMutex.RLock()
 			if l.closed {
