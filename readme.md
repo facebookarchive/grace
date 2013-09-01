@@ -5,9 +5,10 @@ Package grace provides a library that makes it easy to build socket
 based servers that can be gracefully terminated & restarted (that is,
 without dropping any connections).
 
-It provides a convenient API for HTTP servers, especially if you need to listen
-on multiple ports (for example a secondary internal only admin server).
-Additionally it is implemented using the same API as systemd providing [socket
+It provides a convenient API for HTTP servers including support for TLS,
+especially if you need to listen on multiple ports (for example a secondary
+internal only admin server).  Additionally it is implemented using the same API
+as systemd providing [socket
 activation](http://0pointer.de/blog/projects/socket-activation.html)
 compatibility to also provide lazy activation of the server.
 
