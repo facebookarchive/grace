@@ -161,7 +161,6 @@ func Wait(listeners []Listener) (err error) {
 			}
 		}
 	}
-	panic("not reached")
 }
 
 // Try to inherit listeners from the parent process.

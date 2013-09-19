@@ -31,7 +31,7 @@ func wait(wg *sync.WaitGroup, url string) {
 			defer res.Body.Close()
 			var r response
 			if err := json.NewDecoder(res.Body).Decode(&r); err != nil {
-				log.Fatal("Error decoding json: %s", err)
+				log.Fatalf("Error decoding json: %s", err)
 			}
 			if r.Pid == os.Getpid() {
 				return
@@ -54,7 +54,7 @@ func wait(wg *sync.WaitGroup, url string) {
 func httpsServer(addr string) *http.Server {
 	cert, err := tls.X509KeyPair(localhostCert, localhostKey)
 	if err != nil {
-		log.Fatal("error loading cert: %v", err)
+		log.Fatalf("error loading cert: %v", err)
 	}
 	return &http.Server{
 		Addr:    addr,
