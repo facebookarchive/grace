@@ -29,7 +29,8 @@ var (
 
 const (
 	// Used to indicate a graceful restart in the new process.
-	envCountKey = "LISTEN_FDS"
+	envCountKey       = "LISTEN_FDS"
+	envCountKeyPrefix = envCountKey + "="
 
 	// The error returned by the standard library when the socket is closed.
 	errClosed = "use of closed network connection"
@@ -221,10 +222,19 @@ func Restart(listeners []Listener) (err error) {
 	if err != nil {
 		return err
 	}
+
+	var env []string
+	for _, v := range os.Environ() {
+		if !strings.HasPrefix(v, envCountKeyPrefix) {
+			env = append(env, v)
+		}
+	}
+	env = append(env, fmt.Sprintf("%s%d", envCountKeyPrefix, len(listeners)))
+
 	allFiles := append([]*os.File{os.Stdin, os.Stdout, os.Stderr}, files...)
 	_, err = os.StartProcess(argv0, os.Args, &os.ProcAttr{
 		Dir:   wd,
-		Env:   append(os.Environ(), fmt.Sprintf("%s=%d", envCountKey, len(listeners))),
+		Env:   env,
 		Files: allFiles,
 	})
 	return err
