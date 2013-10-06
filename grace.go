@@ -92,11 +92,12 @@ func (l *listener) Close() error {
 	return err
 }
 
-func (l *listener) Accept() (c net.Conn, err error) {
+func (l *listener) Accept() (net.Conn, error) {
 	// Presume we'll accept and decrement in defer if we don't. If we did this
 	// after a successful accept we would have a race condition where we may end
 	// up incorrectly shutting down between the time we do a successful accept
 	// and the increment.
+	var c net.Conn
 	l.wg.Add(1)
 	defer func() {
 		// If we didn't accept, we decrement our presumptuous count above.
@@ -112,7 +113,7 @@ func (l *listener) Accept() (c net.Conn, err error) {
 	}
 	l.closedMutex.RUnlock()
 
-	c, err = l.Listener.Accept()
+	c, err := l.Listener.Accept()
 	if err != nil {
 		if strings.HasSuffix(err.Error(), errClosed) {
 			return nil, ErrAlreadyClosed
