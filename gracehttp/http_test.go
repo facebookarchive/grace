@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net"
@@ -86,7 +87,7 @@ type harness struct {
 }
 
 // Find 3 free ports and setup addresses.
-func (h *harness) SetupAddr() {
+func (h *harness) setupAddr() {
 	port, err := freeport.Get()
 	if err != nil {
 		h.T.Fatalf("Failed to find a free port: %s", err)
@@ -98,17 +99,24 @@ func (h *harness) SetupAddr() {
 		h.T.Fatalf("Failed to find a free port: %s", err)
 	}
 	h.httpsAddr = fmt.Sprintf("127.0.0.1:%d", port)
+	debug("Addresses %s & %s", h.httpAddr, h.httpsAddr)
 }
 
 // Start a fresh server and wait for pid updates on restart.
 func (h *harness) Start() {
-	h.SetupAddr()
+	h.setupAddr()
 	cmd := exec.Command(build(h.T), "-http", h.httpAddr, "-https", h.httpsAddr)
 	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		h.T.Fatal(err)
+	}
 	go func() {
 		reader := bufio.NewReader(stderr)
 		for {
 			line, isPrefix, err := reader.ReadLine()
+			if err == io.EOF {
+				return
+			}
 			if err != nil {
 				log.Fatalf("Failed to read line from server process: %s", err)
 			}
@@ -236,14 +244,40 @@ func (h *harness) Wait() {
 	h.RequestWaitGroup.Wait()
 }
 
+func newHarness(t *testing.T) *harness {
+	return &harness{
+		T:          t,
+		newProcess: make(chan bool),
+	}
+}
+
 // The main test case.
 func TestComplex(t *testing.T) {
 	t.Parallel()
 	debug("Started TestComplex")
-	h := &harness{
-		T:          t,
-		newProcess: make(chan bool),
-	}
+	h := newHarness(t)
+	debug("Initial Start")
+	h.Start()
+	debug("Send Request 1")
+	h.SendRequest()
+	debug("Restart 1")
+	h.Restart()
+	debug("Send Request 2")
+	h.SendRequest()
+	debug("Restart 2")
+	h.Restart()
+	debug("Send Request 3")
+	h.SendRequest()
+	debug("Stopping")
+	h.Stop()
+	debug("Waiting")
+	h.Wait()
+}
+
+func TestComplexAgain(t *testing.T) {
+	t.Parallel()
+	debug("Started TestComplex")
+	h := newHarness(t)
 	debug("Initial Start")
 	h.Start()
 	debug("Send Request 1")
