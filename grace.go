@@ -222,10 +222,9 @@ func Restart(listeners []Listener) (err error) {
 		return err
 	}
 	allFiles := append([]*os.File{os.Stdin, os.Stdout, os.Stderr}, files...)
-	allFiles = append(allFiles, nil)
 	_, err = os.StartProcess(argv0, os.Args, &os.ProcAttr{
 		Dir:   wd,
-		Env:   append(os.Environ(), fmt.Sprintf("%s=%d", envCountKey, len(files))),
+		Env:   append(os.Environ(), fmt.Sprintf("%s=%d", envCountKey, len(listeners))),
 		Files: allFiles,
 	})
 	return err
