@@ -58,9 +58,8 @@ type conn struct {
 }
 
 func (c conn) Close() error {
-	err := c.Conn.Close()
-	c.wg.Done()
-	return err
+	defer c.wg.Done()
+	return c.Conn.Close()
 }
 
 // Wraps an existing File listener to provide a graceful Close() process.
