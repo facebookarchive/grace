@@ -51,6 +51,10 @@ type listener struct {
 	wg          sync.WaitGroup
 }
 
+type deadliner interface {
+	SetDeadline(t time.Time) error
+}
+
 // Allows for us to notice when the connection is closed.
 type conn struct {
 	net.Conn
@@ -76,9 +80,7 @@ func (l *listener) Close() error {
 	// Init provided sockets dont actually close so we trigger Accept to return
 	// by setting the deadline.
 	if os.Getppid() == 1 {
-		if ld, ok := l.Listener.(interface {
-			SetDeadline(t time.Time) error
-		}); ok {
+		if ld, ok := l.Listener.(deadliner); ok {
 			ld.SetDeadline(timeInPast)
 		} else {
 			fmt.Fprintln(os.Stderr, "init activated server did not have SetDeadline")
