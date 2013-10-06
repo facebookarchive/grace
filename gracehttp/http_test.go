@@ -256,8 +256,8 @@ func TestComplex(t *testing.T) {
 	h.Restart()
 	debug("Send Request 3")
 	h.SendRequest()
-	debug("Waiting")
-	h.Wait()
 	debug("Stopping")
 	h.Stop()
+	debug("Waiting")
+	h.Wait()
 }
