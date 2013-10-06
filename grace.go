@@ -205,6 +205,8 @@ func Restart(listeners []Listener) (err error) {
 	if len(listeners) == 0 {
 		return errors.New("restart must be given listeners.")
 	}
+
+	// Extract the fds from the listeners.
 	files := make([]*os.File, len(listeners))
 	for i, l := range listeners {
 		files[i], err = l.File()
@@ -214,15 +216,21 @@ func Restart(listeners []Listener) (err error) {
 		defer files[i].Close()
 		syscall.CloseOnExec(int(files[i].Fd()))
 	}
+
+	// Use the original binary location. This works with symlinks such that if
+	// the file it points to has been changed we will use the updated symlink.
 	argv0, err := exec.LookPath(os.Args[0])
 	if err != nil {
 		return err
 	}
+
+	// In order to keep the working directory the same as when we started.
 	wd, err := os.Getwd()
 	if err != nil {
 		return err
 	}
 
+	// Pass on the environment and replace the old count key with the new one.
 	var env []string
 	for _, v := range os.Environ() {
 		if !strings.HasPrefix(v, envCountKeyPrefix) {
