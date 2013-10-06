@@ -31,6 +31,40 @@ func debug(format string, a ...interface{}) {
 	}
 }
 
+var (
+	buildOut  string
+	buildErr  error
+	buildOnce sync.Once
+)
+
+// Builds the command.
+func build(t *testing.T) string {
+	buildOnce.Do(func() {
+		const pkg = "github.com/daaku/go.grace/gracehttp/testserver"
+		basename := filepath.Base(pkg)
+		tempFile, err := ioutil.TempFile("", basename+"-")
+		if err != nil {
+			buildErr = err
+			return
+		}
+		buildOut = tempFile.Name()
+		_ = os.Remove(buildOut) // the build tool will create this
+		options := tool.Options{
+			ImportPaths: []string{pkg},
+			Output:      buildOut,
+		}
+		_, err = options.Command("build")
+		if err != nil {
+			buildErr = err
+			return
+		}
+	})
+	if buildErr != nil {
+		t.Fatal(buildErr)
+	}
+	return buildOut
+}
+
 // The response from the test server.
 type response struct {
 	Sleep time.Duration
@@ -41,8 +75,6 @@ type response struct {
 // State for the test run.
 type harness struct {
 	T                 *testing.T     // The test instance.
-	ImportPath        string         // The import path for the server command.
-	ExeName           string         // The temp binary from the build.
 	httpAddr          string         // The address for the http server.
 	httpsAddr         string         // The address for the https server.
 	Process           []*os.Process  // The server commands, oldest to newest.
@@ -68,29 +100,10 @@ func (h *harness) SetupAddr() {
 	h.httpsAddr = fmt.Sprintf("127.0.0.1:%d", port)
 }
 
-// Builds the command.
-func (h *harness) Build() {
-	basename := filepath.Base(h.ImportPath)
-	tempFile, err := ioutil.TempFile("", basename+"-")
-	if err != nil {
-		h.T.Fatalf("Error creating temp file: %s", err)
-	}
-	h.ExeName = tempFile.Name()
-	_ = os.Remove(h.ExeName) // the build tool will create this
-	options := tool.Options{
-		ImportPaths: []string{h.ImportPath},
-		Output:      h.ExeName,
-	}
-	_, err = options.Command("build")
-	if err != nil {
-		h.T.Fatal(err)
-	}
-}
-
 // Start a fresh server and wait for pid updates on restart.
 func (h *harness) Start() {
 	h.SetupAddr()
-	cmd := exec.Command(h.ExeName, "-http", h.httpAddr, "-https", h.httpsAddr)
+	cmd := exec.Command(build(h.T), "-http", h.httpAddr, "-https", h.httpsAddr)
 	stderr, err := cmd.StderrPipe()
 	go func() {
 		reader := bufio.NewReader(stderr)
@@ -153,14 +166,6 @@ func (h *harness) MostRecentProcess() *os.Process {
 		h.T.Fatalf("Most recent command requested before command was created.")
 	}
 	return h.Process[l-1]
-}
-
-// Remove the built executable.
-func (h *harness) RemoveExe() {
-	err := os.Remove(h.ExeName)
-	if err != nil {
-		h.T.Fatalf("Failed to RemoveExe: %s", err)
-	}
 }
 
 // Get the global request count and increment it.
@@ -233,14 +238,12 @@ func (h *harness) Wait() {
 
 // The main test case.
 func TestComplex(t *testing.T) {
+	t.Parallel()
 	debug("Started TestComplex")
 	h := &harness{
-		ImportPath: "github.com/daaku/go.grace/gracehttp/testserver",
 		T:          t,
 		newProcess: make(chan bool),
 	}
-	debug("Building")
-	h.Build()
 	debug("Initial Start")
 	h.Start()
 	debug("Send Request 1")
@@ -257,6 +260,4 @@ func TestComplex(t *testing.T) {
 	h.Wait()
 	debug("Stopping")
 	h.Stop()
-	debug("Removing Executable")
-	h.RemoveExe()
 }
