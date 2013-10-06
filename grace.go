@@ -183,7 +183,7 @@ func Inherit() (listeners []Listener, err error) {
 		if err != nil {
 			return nil, err
 		}
-		l := tmp.(*net.TCPListener)
+		l := tmp.(Listener)
 		listeners = append(listeners, NewListener(l))
 	}
 	return
