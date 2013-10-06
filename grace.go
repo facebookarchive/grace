@@ -81,7 +81,7 @@ func (l *listener) Close() error {
 	// by setting the deadline.
 	if os.Getppid() == 1 {
 		if ld, ok := l.Listener.(deadliner); ok {
-			ld.SetDeadline(timeInPast)
+			err = ld.SetDeadline(timeInPast)
 		} else {
 			fmt.Fprintln(os.Stderr, "init activated server did not have SetDeadline")
 		}
