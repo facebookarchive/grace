@@ -148,11 +148,11 @@ func Wait(listeners []Listener) (err error) {
 			wg.Add(len(listeners))
 			for _, l := range listeners {
 				go func(l Listener) {
+					defer wg.Done()
 					cErr := l.Close()
 					if cErr != nil {
 						err = cErr
 					}
-					wg.Done()
 				}(l)
 			}
 			wg.Wait()
