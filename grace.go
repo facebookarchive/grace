@@ -24,7 +24,7 @@ var (
 	ErrAlreadyClosed = errors.New("already closed")
 
 	// Time in the past to trigger immediate deadline.
-	timeInPast = time.Date(1983, time.November, 6, 0, 0, 0, 0, time.UTC)
+	timeInPast = time.Now()
 )
 
 const (
