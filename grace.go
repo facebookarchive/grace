@@ -156,6 +156,7 @@ func Wait(listeners []Listener) (err error) {
 				}(l)
 			}
 			wg.Wait()
+			signal.Stop(ch)
 			return
 		case syscall.SIGUSR2:
 			rErr := Restart(listeners)
