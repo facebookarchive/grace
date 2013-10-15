@@ -16,40 +16,66 @@ import (
 	"github.com/daaku/go.grace"
 )
 
-type serverSlice []*http.Server
-
 var (
-	verbose           = flag.Bool("gracehttp.log", true, "Enable logging.")
-	errListenersCount = errors.New("unexpected listeners count")
+	verbose               = flag.Bool("gracehttp.log", true, "Enable logging.")
+	errListenersCount     = errors.New("unexpected listeners count")
+	errNoStartedListeners = errors.New("no started listeners")
 )
 
-// Creates new listeners for all the given addresses.
-func (servers serverSlice) newListeners() ([]grace.Listener, error) {
-	listeners := make([]grace.Listener, len(servers))
-	for index, pair := range servers {
-		addr, err := net.ResolveTCPAddr("tcp", pair.Addr)
+// Defines an application containing various servers and associated
+// configuration.
+type App struct {
+	Servers   []*http.Server
+	listeners []grace.Listener
+	errors    chan error
+}
+
+// Inherit or create new listeners. Returns a bool indicating if we inherited
+// listeners. This return value is useful in order to decide if we should
+// instruct the parent process to terminate.
+func (a *App) Listen() (bool, error) {
+	var err error
+	a.errors = make(chan error, len(a.Servers))
+	a.listeners, err = grace.Inherit()
+	if err == nil {
+		if len(a.Servers) != len(a.listeners) {
+			return true, errListenersCount
+		}
+		return true, nil
+	} else if err == grace.ErrNotInheriting {
+		if a.listeners, err = a.newListeners(); err != nil {
+			return false, err
+		}
+		return false, nil
+	}
+	return false, fmt.Errorf("Failed graceful handoff: %s", err)
+}
+
+// Creates new listeners (as in not inheriting) for all the configured Servers.
+func (a *App) newListeners() ([]grace.Listener, error) {
+	listeners := make([]grace.Listener, len(a.Servers))
+	for index, server := range a.Servers {
+		addr, err := net.ResolveTCPAddr("tcp", server.Addr)
 		if err != nil {
-			return nil, fmt.Errorf(
-				"Failed net.ResolveTCPAddr for %s: %s", pair.Addr, err)
+			return nil, fmt.Errorf("net.ResolveTCPAddr %s: %s", server.Addr, err)
 		}
 		l, err := net.ListenTCP("tcp", addr)
 		if err != nil {
-			return nil, fmt.Errorf("Failed net.ListenTCP for %s: %s", pair.Addr, err)
+			return nil, fmt.Errorf("net.ListenTCP %s: %s", server.Addr, err)
 		}
 		listeners[index] = grace.NewListener(l)
 	}
 	return listeners, nil
 }
 
-// Serve on the given listeners and wait for signals.
-func (servers serverSlice) serveWait(listeners []grace.Listener) error {
-	if len(servers) != len(listeners) {
-		return errListenersCount
-	}
-	errch := make(chan error, len(listeners)+1) // listeners + grace.Wait
-	for i, l := range listeners {
+// Serve the configured servers, but do not block. You must call Wait at some
+// point to ensure correctly waiting for graceful termination.
+func (a *App) Serve() {
+	for i, l := range a.listeners {
 		go func(i int, l net.Listener) {
-			server := servers[i]
+			server := a.Servers[i]
+
+			// Wrap the listener for TLS support if necessary.
 			if server.TLSConfig != nil {
 				l = tls.NewListener(l, server.TLSConfig)
 			}
@@ -58,61 +84,65 @@ func (servers serverSlice) serveWait(listeners []grace.Listener) error {
 			// The underlying Accept() will return grace.ErrAlreadyClosed
 			// when a signal to do the same is returned, which we are okay with.
 			if err != nil && err != grace.ErrAlreadyClosed {
-				errch <- fmt.Errorf("Failed http.Serve: %s", err)
+				a.errors <- fmt.Errorf("http.Serve: %s", err)
 			}
 		}(i, l)
 	}
-	go func() {
-		err := grace.Wait(listeners)
-		if err != nil {
-			errch <- fmt.Errorf("Failed grace.Wait: %s", err)
-		} else {
-			errch <- nil
-		}
-	}()
-	return <-errch
+}
+
+// Wait for the serving goroutines to finish.
+func (a *App) Wait() error {
+	waiterr := make(chan error)
+	go func() { waiterr <- grace.Wait(a.listeners) }()
+	select {
+	case err := <-waiterr:
+		return err
+	case err := <-a.errors:
+		return err
+	}
 }
 
 // Serve will serve the given pairs of addresses and listeners and
 // will monitor for signals allowing for graceful termination (SIGTERM)
 // or restart (SIGUSR2).
 func Serve(servers ...*http.Server) error {
-	sslice := serverSlice(servers)
-	listeners, err := grace.Inherit()
-	if err == nil {
-		err = grace.CloseParent()
-		if err != nil {
-			return fmt.Errorf("Failed to close parent: %s", err)
-		}
-		if *verbose {
-			ppid := os.Getppid()
-			if ppid == 1 {
-				log.Printf("Listening on init activated %s", pprintAddr(listeners))
-			} else {
-				log.Printf(
-					"Graceful handoff of %s with new pid %d and old pid %d.",
-					pprintAddr(listeners), os.Getpid(), ppid)
-			}
-		}
-	} else if err == grace.ErrNotInheriting {
-		listeners, err = sslice.newListeners()
-		if err != nil {
-			return err
-		}
-		if *verbose {
-			log.Printf("Serving %s with pid %d.", pprintAddr(listeners), os.Getpid())
-		}
-	} else {
-		return fmt.Errorf("Failed graceful handoff: %s", err)
-	}
-	err = sslice.serveWait(listeners)
+	app := &App{Servers: servers}
+	inherited, err := app.Listen()
 	if err != nil {
 		return err
 	}
+
+	if *verbose {
+		if inherited {
+			ppid := os.Getppid()
+			if ppid == 1 {
+				log.Printf("Listening on init activated %s", pprintAddr(app.listeners))
+			} else {
+				const msg = "Graceful handoff of %s with new pid %d and old pid %d"
+				log.Printf(msg, pprintAddr(app.listeners), os.Getpid(), ppid)
+			}
+		} else {
+			const msg = "Serving %s with pid %d"
+			log.Printf(msg, pprintAddr(app.listeners), os.Getpid())
+		}
+	}
+
+	app.Serve()
+
+	// Close the parent if we inherited and it wasn't init that started us.
+	if inherited && os.Getppid() != 1 {
+		if err := grace.CloseParent(); err != nil {
+			return fmt.Errorf("Failed to close parent: %s", err)
+		}
+	}
+
+	err = app.Wait()
+
 	if *verbose {
 		log.Printf("Exiting pid %d.", os.Getpid())
 	}
-	return nil
+
+	return err
 }
 
 // Used for pretty printing addresses.

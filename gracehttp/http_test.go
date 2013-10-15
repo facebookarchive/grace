@@ -7,13 +7,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"sync"
 	"syscall"
 	"testing"
@@ -23,8 +20,13 @@ import (
 	"github.com/daaku/go.tool"
 )
 
-// Debug logging.
-var debugLog = flag.Bool("debug", false, "enable debug logging")
+var (
+	// Debug logging.
+	debugLog          = flag.Bool("debug", false, "enable debug logging")
+	testserverCommand = &tool.CommandBuild{
+		ImportPath: "github.com/daaku/go.grace/gracehttp/testserver",
+	}
+)
 
 func debug(format string, a ...interface{}) {
 	if *debugLog {
@@ -37,34 +39,6 @@ var (
 	buildErr  error
 	buildOnce sync.Once
 )
-
-// Builds the command.
-func build(t *testing.T) string {
-	buildOnce.Do(func() {
-		const pkg = "github.com/daaku/go.grace/gracehttp/testserver"
-		basename := filepath.Base(pkg)
-		tempFile, err := ioutil.TempFile("", basename+"-")
-		if err != nil {
-			buildErr = err
-			return
-		}
-		buildOut = tempFile.Name()
-		_ = os.Remove(buildOut) // the build tool will create this
-		options := tool.Options{
-			ImportPaths: []string{pkg},
-			Output:      buildOut,
-		}
-		_, err = options.Command("build")
-		if err != nil {
-			buildErr = err
-			return
-		}
-	})
-	if buildErr != nil {
-		t.Fatal(buildErr)
-	}
-	return buildOut
-}
 
 // The response from the test server.
 type response struct {
@@ -104,8 +78,13 @@ func (h *harness) setupAddr() {
 
 // Start a fresh server and wait for pid updates on restart.
 func (h *harness) Start() {
+	bin, err := testserverCommand.Build()
+	if err != nil {
+		h.T.Fatalf("build error: %s", err)
+	}
+
 	h.setupAddr()
-	cmd := exec.Command(build(h.T), "-http", h.httpAddr, "-https", h.httpsAddr)
+	cmd := exec.Command(bin, "-http", h.httpAddr, "-https", h.httpsAddr)
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		h.T.Fatal(err)
@@ -118,22 +97,22 @@ func (h *harness) Start() {
 				return
 			}
 			if err != nil {
-				log.Fatalf("Failed to read line from server process: %s", err)
+				println(fmt.Sprintf("Failed to read line from server process: %s", err))
 			}
 			if isPrefix {
-				log.Fatalf("Deal with isPrefix for line: %s", line)
+				println(fmt.Sprintf("Deal with isPrefix for line: %s", line))
 			}
 			res := &response{}
 			err = json.Unmarshal([]byte(line), res)
 			if err != nil {
-				log.Fatalf("Could not parse json from stderr %s: %s", line, err)
+				println(fmt.Sprintf("Could not parse json from stderr %s: %s", line, err))
 			}
 			if res.Error != "" {
 				println(fmt.Sprintf("Got error from process: %v", res))
 			}
 			process, err := os.FindProcess(res.Pid)
 			if err != nil {
-				log.Fatalf("Could not find process with pid: %d", res.Pid)
+				println(fmt.Sprintf("Could not find process with pid: %d", res.Pid))
 			}
 			h.ProcessMutex.Lock()
 			h.Process = append(h.Process, process)
