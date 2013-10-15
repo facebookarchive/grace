@@ -144,6 +144,7 @@ func Wait(listeners []Listener) (err error) {
 		sig := <-ch
 		switch sig {
 		case syscall.SIGTERM:
+			signal.Stop(ch)
 			var wg sync.WaitGroup
 			wg.Add(len(listeners))
 			for _, l := range listeners {
@@ -156,7 +157,6 @@ func Wait(listeners []Listener) (err error) {
 				}(l)
 			}
 			wg.Wait()
-			signal.Stop(ch)
 			return
 		case syscall.SIGUSR2:
 			rErr := Restart(listeners)
