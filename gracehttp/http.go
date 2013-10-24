@@ -102,9 +102,8 @@ func (a *App) Wait() error {
 	}
 }
 
-// Serve will serve the given pairs of addresses and listeners and
-// will monitor for signals allowing for graceful termination (SIGTERM)
-// or restart (SIGUSR2).
+// Serve will serve the given http.Servers and will monitor for signals
+// allowing for graceful termination (SIGTERM) or restart (SIGUSR2).
 func Serve(servers ...*http.Server) error {
 	app := &App{Servers: servers}
 	inherited, err := app.Listen()
