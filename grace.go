@@ -136,8 +136,11 @@ func (l *listener) Accept() (net.Conn, error) {
 	return conn{Conn: c, wg: &l.wg}, nil
 }
 
+type Process struct {
+}
+
 // Wait for signals to gracefully terminate or restart the process.
-func Wait(listeners []Listener) (err error) {
+func (p *Process) Wait(listeners []Listener) (err error) {
 	ch := make(chan os.Signal, 2)
 	signal.Notify(ch, syscall.SIGTERM, syscall.SIGUSR2)
 	for {
@@ -168,7 +171,7 @@ func Wait(listeners []Listener) (err error) {
 }
 
 // Try to inherit listeners from the parent process.
-func Inherit() (listeners []Listener, err error) {
+func (p *Process) Inherit() (listeners []Listener, err error) {
 	countStr := os.Getenv(envCountKey)
 	if countStr == "" {
 		return nil, ErrNotInheriting
@@ -193,7 +196,7 @@ func Inherit() (listeners []Listener, err error) {
 
 // Start the Close process in the parent. This does not wait for the
 // parent to close and simply sends it the TERM signal.
-func CloseParent() error {
+func (p *Process) CloseParent() error {
 	ppid := os.Getppid()
 	if ppid == 1 { // init provided sockets, for example systemd
 		return nil
@@ -202,7 +205,7 @@ func CloseParent() error {
 }
 
 // Restart the process passing the given listeners to the new process.
-func Restart(listeners []Listener) (err error) {
+func (p *Process) Restart(listeners []Listener) (err error) {
 	if len(listeners) == 0 {
 		return errors.New("restart must be given listeners.")
 	}
@@ -247,4 +250,27 @@ func Restart(listeners []Listener) (err error) {
 		Files: allFiles,
 	})
 	return err
+}
+
+var defaultProcess = &Process{}
+
+// Wait for signals to gracefully terminate or restart the process.
+func Wait(listeners []Listener) (err error) {
+	return defaultProcess.Wait(listeners)
+}
+
+// Try to inherit listeners from the parent process.
+func Inherit() (listeners []Listener, err error) {
+	return defaultProcess.Inherit()
+}
+
+// Start the Close process in the parent. This does not wait for the
+// parent to close and simply sends it the TERM signal.
+func CloseParent() error {
+	return defaultProcess.CloseParent()
+}
+
+// Restart the process passing the given listeners to the new process.
+func Restart(listeners []Listener) (err error) {
+	return defaultProcess.Restart(listeners)
 }
