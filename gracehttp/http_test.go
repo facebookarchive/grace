@@ -173,7 +173,10 @@ func (h *harness) SendOne(dialgroup *sync.WaitGroup, url string, pid int) {
 		Transport: &http.Transport{
 			DisableKeepAlives: true,
 			Dial: func(network, addr string) (net.Conn, error) {
-				defer dialgroup.Done()
+				defer func() {
+					time.Sleep(50 * time.Millisecond)
+					dialgroup.Done()
+				}()
 				return net.Dial(network, addr)
 			},
 			TLSClientConfig: &tls.Config{
