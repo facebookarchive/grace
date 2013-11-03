@@ -64,7 +64,7 @@ type conn struct {
 }
 
 func (c *conn) Close() error {
-	c.once.Do(func() { c.wg.Done() })
+	c.once.Do(func() { defer c.wg.Done() })
 	return c.Conn.Close()
 }
 
