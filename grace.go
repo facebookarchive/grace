@@ -63,7 +63,7 @@ type conn struct {
 	once sync.Once
 }
 
-func (c conn) Close() error {
+func (c *conn) Close() error {
 	c.once.Do(func() { c.wg.Done() })
 	return c.Conn.Close()
 }
@@ -134,7 +134,7 @@ func (l *listener) Accept() (net.Conn, error) {
 		}
 		return nil, err
 	}
-	return conn{Conn: c, wg: &l.wg}, nil
+	return &conn{Conn: c, wg: &l.wg}, nil
 }
 
 type Process struct {
