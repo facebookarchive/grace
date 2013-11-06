@@ -1,4 +1,4 @@
-go.grace [![Build Status](https://secure.travis-ci.org/daaku/go.grace.png)](http://travis-ci.org/daaku/go.grace)
+go.grace [![Build Status](https://secure.travis-ci.org/ParsePlatform/go.grace.png)](http://travis-ci.org/ParsePlatform/go.grace)
 ========
 
 Package grace provides a library that makes it easy to build socket
@@ -17,11 +17,11 @@ Usage
 -----
 
 Demo HTTP Server with graceful termination and restart:
-https://github.com/daaku/go.grace/blob/master/gracedemo/demo.go
+https://github.com/ParsePlatform/go.grace/blob/master/gracedemo/demo.go
 
 1. Install the demo application
 
-        go get github.com/daaku/go.grace/gracedemo
+        go get github.com/ParsePlatform/go.grace/gracedemo
 
 1. Start it in the first terminal
 
@@ -55,7 +55,7 @@ Documentation
 -------------
 
 `http.Server` graceful termination and restart:
-http://godoc.org/github.com/daaku/go.grace/gracehttp
+http://godoc.org/github.com/ParsePlatform/go.grace/gracehttp
 
 `net.Listener` graceful termination and restart:
-http://godoc.org/github.com/daaku/go.grace
+http://godoc.org/github.com/ParsePlatform/go.grace

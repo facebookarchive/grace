@@ -16,15 +16,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/daaku/go.freeport"
-	"github.com/daaku/go.tool"
+	"github.com/ParsePlatform/go.freeport"
+	"github.com/ParsePlatform/go.tool"
 )
 
 var (
 	// Debug logging.
 	debugLog          = flag.Bool("debug", false, "enable debug logging")
 	testserverCommand = &tool.CommandBuild{
-		ImportPath: "github.com/daaku/go.grace/gracehttp/testserver",
+		ImportPath: "github.com/ParsePlatform/go.grace/gracehttp/testserver",
 	}
 )
 

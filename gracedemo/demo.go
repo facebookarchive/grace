@@ -5,7 +5,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/daaku/go.grace/gracehttp"
+	"github.com/ParsePlatform/go.grace/gracehttp"
 	"net/http"
 	"os"
 	"time"

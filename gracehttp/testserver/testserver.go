@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/daaku/go.grace/gracehttp"
+	"github.com/ParsePlatform/go.grace/gracehttp"
 )
 
 type response struct {
