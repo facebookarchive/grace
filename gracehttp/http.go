@@ -22,17 +22,16 @@ var (
 	errNoStartedListeners = errors.New("no started listeners")
 )
 
-// Defines an application containing various servers and associated
-// configuration.
+// An App contains one or more servers and associated configuration.
 type App struct {
 	Servers   []*http.Server
 	listeners []grace.Listener
 	errors    chan error
 }
 
-// Inherit or create new listeners. Returns a bool indicating if we inherited
-// listeners. This return value is useful in order to decide if we should
-// instruct the parent process to terminate.
+// Listen will inherit or create new listeners. Returns a bool indicating if we
+// inherited listeners. This return value is useful in order to decide if we
+// should instruct the parent process to terminate.
 func (a *App) Listen() (bool, error) {
 	var err error
 	a.errors = make(chan error, len(a.Servers))
@@ -48,7 +47,7 @@ func (a *App) Listen() (bool, error) {
 		}
 		return false, nil
 	}
-	return false, fmt.Errorf("Failed graceful handoff: %s", err)
+	return false, fmt.Errorf("failed graceful handoff: %s", err)
 }
 
 // Creates new listeners (as in not inheriting) for all the configured Servers.
@@ -131,7 +130,7 @@ func Serve(servers ...*http.Server) error {
 	// Close the parent if we inherited and it wasn't init that started us.
 	if inherited && os.Getppid() != 1 {
 		if err := grace.CloseParent(); err != nil {
-			return fmt.Errorf("Failed to close parent: %s", err)
+			return fmt.Errorf("failed to close parent: %s", err)
 		}
 	}
 
