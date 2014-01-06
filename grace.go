@@ -25,6 +25,11 @@ var (
 
 	// Time in the past to trigger immediate deadline.
 	timeInPast = time.Now()
+
+	// Test if init activated by checking ppid on startup since we will get
+	// re-parented once the old parent is killed and we will end up looking like
+	// we're init started.
+	initStarted = os.Getppid() == 1
 )
 
 const (
@@ -81,7 +86,7 @@ func (l *listener) Close() error {
 	var err error
 	// Init provided sockets dont actually close so we trigger Accept to return
 	// by setting the deadline.
-	if os.Getppid() == 1 {
+	if initStarted {
 		if ld, ok := l.Listener.(deadliner); ok {
 			err = ld.SetDeadline(timeInPast)
 		} else {
