@@ -30,6 +30,11 @@ var (
 	// re-parented once the old parent is killed and we will end up looking like
 	// we're init started.
 	initStarted = os.Getppid() == 1
+
+	// OnSIGUSR1 is the function called when the server receives a
+	// SIGUSR1 signal. The normal use case for SIGUSR1 is to repon the
+	// log files.
+	OnSIGUSR1 func()
 )
 
 const (
@@ -148,7 +153,7 @@ type Process struct {
 // Wait for signals to gracefully terminate or restart the process.
 func (p *Process) Wait(listeners []Listener) (err error) {
 	ch := make(chan os.Signal, 2)
-	signal.Notify(ch, syscall.SIGTERM, syscall.SIGUSR2)
+	signal.Notify(ch, syscall.SIGTERM, syscall.SIGUSR1, syscall.SIGUSR2)
 	for {
 		sig := <-ch
 		switch sig {
@@ -171,6 +176,11 @@ func (p *Process) Wait(listeners []Listener) (err error) {
 			rErr := Restart(listeners)
 			if rErr != nil {
 				return rErr
+			}
+		}
+		case syscall.SIGUSR1:
+			if nil != OnSIGUSR1 {
+				OnSIGUSR1()
 			}
 		}
 	}
