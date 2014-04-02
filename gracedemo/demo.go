@@ -1,5 +1,5 @@
 // Command gracedemo implements a demo server showing how to gracefully
-// terminate an HTTP server using go.grace.
+// terminate an HTTP server using grace.
 package main
 
 import (

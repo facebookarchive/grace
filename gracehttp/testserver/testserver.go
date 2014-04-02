@@ -22,7 +22,20 @@ type response struct {
 	Error string `json:",omitempty"`
 }
 
+// Wait for 10 consecutive responses from our own pid.
+//
+// This prevents flaky tests that arise from the fact that we have the
+// perfectly acceptable (read: not a bug) condition where both the new and the
+// old servers are accepting requests. In fact the amount of time both are
+// accepting at the same time and the number of requests that flip flop between
+// them is unbounded and in the hands of the various kernels our code tends to
+// run on.
+//
+// In order to combat this, we wait for 10 successful responses from our own
+// pid. This is a somewhat reliable way to ensure the old server isn't
+// serving anymore.
 func wait(wg *sync.WaitGroup, url string) {
+	var success int
 	defer wg.Done()
 	for {
 		res, err := http.Get(url)
@@ -34,9 +47,14 @@ func wait(wg *sync.WaitGroup, url string) {
 				log.Fatalf("Error decoding json: %s", err)
 			}
 			if r.Pid == os.Getpid() {
-				return
+				success++
+				if success == 10 {
+					return
+				}
+				continue
 			}
 		} else {
+			success = 0
 			// we expect connection refused
 			if !strings.HasSuffix(err.Error(), "connection refused") {
 				e2 := json.NewEncoder(os.Stderr).Encode(&response{
@@ -90,8 +108,8 @@ func main() {
 	go func() {
 		var wg sync.WaitGroup
 		wg.Add(2)
-		go wait(&wg, fmt.Sprintf("http://%s/sleep/?duration=0", httpAddr))
-		go wait(&wg, fmt.Sprintf("https://%s/sleep/?duration=0", httpsAddr))
+		go wait(&wg, fmt.Sprintf("http://%s/sleep/?duration=1ms", httpAddr))
+		go wait(&wg, fmt.Sprintf("https://%s/sleep/?duration=1ms", httpsAddr))
 		wg.Wait()
 
 		err = json.NewEncoder(os.Stderr).Encode(&response{Pid: os.Getpid()})

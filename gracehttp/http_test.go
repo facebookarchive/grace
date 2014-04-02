@@ -196,6 +196,12 @@ func (h *harness) SendOne(dialgroup *sync.WaitGroup, url string, pid int) {
 		h.T.Fatalf("Failed to ready decode json response body pid=%d: %s", pid, err)
 	}
 	if pid != res.Pid {
+		for _, old := range h.Process[0 : len(h.Process)-1] {
+			if res.Pid == old.Pid {
+				h.T.Logf("Found old pid %d, ignoring the discrepancy", res.Pid)
+				return
+			}
+		}
 		h.T.Fatalf("Didn't get expected pid %d instead got %d", pid, res.Pid)
 	}
 	debug("Done %02d pid=%d url=%s", count, pid, url)
