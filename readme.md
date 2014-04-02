@@ -1,5 +1,5 @@
-go.grace [![Build Status](https://secure.travis-ci.org/facebookgo/grace.png)](http://travis-ci.org/facebookgo/grace)
-========
+grace [![Build Status](https://secure.travis-ci.org/facebookgo/grace.png)](http://travis-ci.org/facebookgo/grace)
+=====
 
 Package grace provides a library that makes it easy to build socket
 based servers that can be gracefully terminated & restarted (that is,
