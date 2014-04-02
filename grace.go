@@ -18,10 +18,13 @@ import (
 
 var (
 	// This error is returned by Inherits() when we're not inheriting any fds.
-	ErrNotInheriting = errors.New("no inherited listeners")
+	ErrNotInheriting = errors.New("grace: no inherited listeners")
 
 	// This error is returned by Listener.Accept() when Close is in progress.
-	ErrAlreadyClosed = errors.New("already closed")
+	ErrAlreadyClosed = errors.New("grace: already closed")
+
+	errRestartListeners = errors.New("grace: restart must be given listeners")
+	errTermTimeout      = errors.New("grace: TERM timeout in closing listeners")
 
 	// Time in the past to trigger immediate deadline.
 	timeInPast = time.Now()
@@ -142,35 +145,71 @@ func (l *listener) Accept() (net.Conn, error) {
 	return &conn{Conn: c, wg: &l.wg}, nil
 }
 
+// Process configures the restart process.
 type Process struct {
+	// TermTimeout if set will determine how long we'll wait for listeners when
+	// we're sent the TERM signal.
+	TermTimeout time.Duration
+}
+
+func (p *Process) term(listeners []Listener) error {
+	// shutdown all listeners in parallel
+	errs := make(chan error, len(listeners))
+	wg := sync.WaitGroup{}
+	wg.Add(len(listeners))
+	for _, l := range listeners {
+		go func(l Listener) {
+			defer wg.Done()
+			if err := l.Close(); err != nil {
+				errs <- err
+			}
+		}(l)
+	}
+
+	if p.TermTimeout.Nanoseconds() == 0 {
+		// no timeout, wait indefinitely
+		wg.Wait()
+	} else {
+		// wait in background to allow for implementing a timeout
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			wg.Wait()
+		}()
+
+		// wait for graceful termination or timeout
+		select {
+		case <-done:
+		case <-time.After(p.TermTimeout):
+			return errTermTimeout
+		}
+	}
+
+	// if any errors occurred, return the first one
+	if len(errs) > 0 {
+		return <-errs
+	}
+
+	return nil
 }
 
 // Wait for signals to gracefully terminate or restart the process.
-func (p *Process) Wait(listeners []Listener) (err error) {
+func (p *Process) Wait(listeners []Listener) error {
 	ch := make(chan os.Signal, 2)
 	signal.Notify(ch, syscall.SIGTERM, syscall.SIGUSR2)
 	for {
 		sig := <-ch
 		switch sig {
 		case syscall.SIGTERM:
+			// this ensures a subsequent TERM will trigger standard go behaviour of
+			// terminating.
 			signal.Stop(ch)
-			var wg sync.WaitGroup
-			wg.Add(len(listeners))
-			for _, l := range listeners {
-				go func(l Listener) {
-					defer wg.Done()
-					cErr := l.Close()
-					if cErr != nil {
-						err = cErr
-					}
-				}(l)
-			}
-			wg.Wait()
-			return
+			return p.term(listeners)
 		case syscall.SIGUSR2:
-			rErr := Restart(listeners)
-			if rErr != nil {
-				return rErr
+			// we only return here if there's an error, otherwise the new process
+			// will send us a TERM when it's ready to trigger the actual shutdown.
+			if err := p.Restart(listeners); err != nil {
+				return err
 			}
 		}
 	}
@@ -213,7 +252,7 @@ func (p *Process) CloseParent() error {
 // Restart the process passing the given listeners to the new process.
 func (p *Process) Restart(listeners []Listener) (err error) {
 	if len(listeners) == 0 {
-		return errors.New("restart must be given listeners.")
+		return errRestartListeners
 	}
 
 	// Extract the fds from the listeners.

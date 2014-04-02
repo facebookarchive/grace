@@ -16,15 +16,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ParsePlatform/go.freeport"
-	"github.com/ParsePlatform/go.tool"
+	"github.com/facebookgo/freeport"
+	"github.com/facebookgo/tool"
 )
 
 var (
 	// Debug logging.
 	debugLog          = flag.Bool("debug", false, "enable debug logging")
 	testserverCommand = &tool.CommandBuild{
-		ImportPath: "github.com/ParsePlatform/go.grace/gracehttp/testserver",
+		ImportPath: "github.com/facebookgo/grace/gracehttp/testserver",
 	}
 )
 

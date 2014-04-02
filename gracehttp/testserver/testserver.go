@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ParsePlatform/go.grace/gracehttp"
+	"github.com/facebookgo/grace/gracehttp"
 )
 
 type response struct {
