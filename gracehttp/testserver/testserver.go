@@ -92,7 +92,6 @@ func main() {
 
 	// we have self signed certs
 	http.DefaultTransport = &http.Transport{
-		DisableKeepAlives: true,
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
 		},
