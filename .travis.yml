@@ -2,5 +2,3 @@ language: go
 go:
   - 1.1
   - 1.2
-script:
- - curl https://raw.github.com/daaku/go.travis/master/install | sh
