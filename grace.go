@@ -53,6 +53,13 @@ type Listener interface {
 	File() (f *os.File, err error)
 }
 
+type ClosingListener interface {
+	Listener
+
+	// Whether the listener has been closed
+	Closed() bool
+}
+
 type listener struct {
 	Listener
 	closed      bool
@@ -103,6 +110,12 @@ func (l *listener) Close() error {
 	return err
 }
 
+func (l *listener) Closed() bool {
+	l.closedMutex.RLock()
+	defer l.closedMutex.RUnlock()
+	return l.closed
+}
+
 func (l *listener) Accept() (net.Conn, error) {
 	// Presume we'll accept and decrement in defer if we don't. If we did this
 	// after a successful accept we would have a race condition where we may end
@@ -117,12 +130,9 @@ func (l *listener) Accept() (net.Conn, error) {
 		}
 	}()
 
-	l.closedMutex.RLock()
-	if l.closed {
-		l.closedMutex.RUnlock()
+	if l.Closed() {
 		return nil, ErrAlreadyClosed
 	}
-	l.closedMutex.RUnlock()
 
 	c, err := l.Listener.Accept()
 	if err != nil {
@@ -134,12 +144,9 @@ func (l *listener) Accept() (net.Conn, error) {
 		// to handoff to a child as part of our restart process. In this scenario
 		// we want to treat the timeout the same as a Close.
 		if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
-			l.closedMutex.RLock()
-			if l.closed {
-				l.closedMutex.RUnlock()
+			if l.Closed() {
 				return nil, ErrAlreadyClosed
 			}
-			l.closedMutex.RUnlock()
 		}
 		return nil, err
 	}
