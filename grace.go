@@ -17,10 +17,10 @@ import (
 )
 
 var (
-	// This error is returned by Inherits() when we're not inheriting any fds.
+	// ErrNotInheriting is returned by Inherits() when we're not inheriting any fds.
 	ErrNotInheriting = errors.New("grace: no inherited listeners")
 
-	// This error is returned by Listener.Accept() when Close is in progress.
+	// ErrAlreadyClosed is returned by Listener.Accept() when Close is in progress.
 	ErrAlreadyClosed = errors.New("grace: already closed")
 
 	errRestartListeners = errors.New("grace: restart must be given listeners")
@@ -76,7 +76,8 @@ func (c *conn) Close() error {
 	return c.Conn.Close()
 }
 
-// Wraps an existing File listener to provide a graceful Close() process.
+// NewListener wraps an existing File listener to provide a graceful Close()
+// process.
 func NewListener(l Listener) Listener {
 	return &listener{Listener: l}
 }
@@ -215,7 +216,7 @@ func (p *Process) Wait(listeners []Listener) error {
 	}
 }
 
-// Try to inherit listeners from the parent process.
+// Inherit listeners from the parent process.
 func (p *Process) Inherit() (listeners []Listener, err error) {
 	countStr := os.Getenv(envCountKey)
 	if countStr == "" {
@@ -239,8 +240,8 @@ func (p *Process) Inherit() (listeners []Listener, err error) {
 	return
 }
 
-// Start the Close process in the parent. This does not wait for the
-// parent to close and simply sends it the TERM signal.
+// CloseParent starts the close process in the parent. This does not wait for
+// the parent to close and simply sends it the TERM signal.
 func (p *Process) CloseParent() error {
 	ppid := os.Getppid()
 	if ppid == 1 { // init provided sockets, for example systemd
@@ -304,13 +305,13 @@ func Wait(listeners []Listener) (err error) {
 	return defaultProcess.Wait(listeners)
 }
 
-// Try to inherit listeners from the parent process.
+// Inherit listeners from the parent process.
 func Inherit() (listeners []Listener, err error) {
 	return defaultProcess.Inherit()
 }
 
-// Start the Close process in the parent. This does not wait for the
-// parent to close and simply sends it the TERM signal.
+// CloseParent starts the close process in the parent. This does not wait for
+// the parent to close and simply sends it the TERM signal.
 func CloseParent() error {
 	return defaultProcess.CloseParent()
 }

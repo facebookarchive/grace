@@ -210,18 +210,18 @@ func (h *harness) SendOne(dialgroup *sync.WaitGroup, url string, pid int) {
 // Send test HTTP request.
 func (h *harness) SendRequest() {
 	pid := h.MostRecentProcess().Pid
-	httpFastUrl := fmt.Sprintf("http://%s/sleep/?duration=0", h.httpAddr)
-	httpSlowUrl := fmt.Sprintf("http://%s/sleep/?duration=2s", h.httpAddr)
-	httpsFastUrl := fmt.Sprintf("https://%s/sleep/?duration=0", h.httpsAddr)
-	httpsSlowUrl := fmt.Sprintf("https://%s/sleep/?duration=2s", h.httpsAddr)
+	httpFastURL := fmt.Sprintf("http://%s/sleep/?duration=0", h.httpAddr)
+	httpSlowURL := fmt.Sprintf("http://%s/sleep/?duration=2s", h.httpAddr)
+	httpsFastURL := fmt.Sprintf("https://%s/sleep/?duration=0", h.httpsAddr)
+	httpsSlowURL := fmt.Sprintf("https://%s/sleep/?duration=2s", h.httpsAddr)
 
 	var dialgroup sync.WaitGroup
 	h.RequestWaitGroup.Add(4)
 	dialgroup.Add(4)
-	go h.SendOne(&dialgroup, httpFastUrl, pid)
-	go h.SendOne(&dialgroup, httpSlowUrl, pid)
-	go h.SendOne(&dialgroup, httpsFastUrl, pid)
-	go h.SendOne(&dialgroup, httpsSlowUrl, pid)
+	go h.SendOne(&dialgroup, httpFastURL, pid)
+	go h.SendOne(&dialgroup, httpSlowURL, pid)
+	go h.SendOne(&dialgroup, httpsFastURL, pid)
+	go h.SendOne(&dialgroup, httpsSlowURL, pid)
 	debug("Added Requests pid=%d", pid)
 	dialgroup.Wait()
 	debug("Dialed Requests pid=%d", pid)
