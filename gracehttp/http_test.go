@@ -171,7 +171,6 @@ func (h *harness) SendOne(dialgroup *sync.WaitGroup, url string, pid int) {
 	debug("Send %02d pid=%d url=%s", count, pid, url)
 	client := &http.Client{
 		Transport: &http.Transport{
-			DisableKeepAlives: true,
 			Dial: func(network, addr string) (net.Conn, error) {
 				defer func() {
 					time.Sleep(50 * time.Millisecond)
