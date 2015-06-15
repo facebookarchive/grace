@@ -1,4 +1,4 @@
-grace [![Build Status](https://secure.travis-ci.org/facebookgo/grace.png)](http://travis-ci.org/facebookgo/grace)
+grace [![Build Status](https://secure.travis-ci.org/facebookgo/grace.png)](https://travis-ci.org/facebookgo/grace)
 =====
 
 Package grace provides a library that makes it easy to build socket
@@ -55,7 +55,7 @@ Documentation
 -------------
 
 `http.Server` graceful termination and restart:
-http://godoc.org/github.com/facebookgo/grace/gracehttp
+https://godoc.org/github.com/facebookgo/grace/gracehttp
 
 `net.Listener` graceful termination and restart:
-http://godoc.org/github.com/facebookgo/grace
+https://godoc.org/github.com/facebookgo/gracenet
