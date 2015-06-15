@@ -17,34 +17,15 @@ import (
 	"time"
 
 	"github.com/facebookgo/freeport"
-	"github.com/facebookgo/tool"
 )
 
-var (
-	// Debug logging.
-	debugLog          = flag.Bool("debug", false, "enable debug logging")
-	testserverCommand = &tool.CommandBuild{
-		ImportPath: "github.com/facebookgo/grace/gracehttp/testserver",
-	}
-)
+// Debug logging.
+var debugLog = flag.Bool("debug", false, "enable debug logging")
 
 func debug(format string, a ...interface{}) {
 	if *debugLog {
 		println(fmt.Sprintf(format, a...))
 	}
-}
-
-var (
-	buildOut  string
-	buildErr  error
-	buildOnce sync.Once
-)
-
-// The response from the test server.
-type response struct {
-	Sleep time.Duration
-	Pid   int
-	Error string
 }
 
 // State for the test run.
@@ -78,13 +59,8 @@ func (h *harness) setupAddr() {
 
 // Start a fresh server and wait for pid updates on restart.
 func (h *harness) Start() {
-	bin, err := testserverCommand.Build()
-	if err != nil {
-		h.T.Fatalf("build error: %s", err)
-	}
-
 	h.setupAddr()
-	cmd := exec.Command(bin, "-http", h.httpAddr, "-https", h.httpsAddr)
+	cmd := exec.Command(os.Args[0], "-http", h.httpAddr, "-https", h.httpsAddr)
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		h.T.Fatal(err)

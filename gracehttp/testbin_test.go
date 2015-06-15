@@ -1,5 +1,4 @@
-// Command testserver implements a test case.
-package main
+package gracehttp_test
 
 import (
 	"crypto/tls"
@@ -11,10 +10,26 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/facebookgo/grace/gracehttp"
 )
+
+func TestMain(m *testing.M) {
+	const (
+		testbinKey   = "GRACEHTTP_TEST_BIN"
+		testbinValue = "1"
+	)
+	if os.Getenv(testbinKey) == testbinValue {
+		testbinMain()
+		return
+	}
+	if err := os.Setenv(testbinKey, testbinValue); err != nil {
+		panic(err)
+	}
+	os.Exit(m.Run())
+}
 
 type response struct {
 	Sleep time.Duration
@@ -84,7 +99,7 @@ func httpsServer(addr string) *http.Server {
 	}
 }
 
-func main() {
+func testbinMain() {
 	var httpAddr, httpsAddr string
 	flag.StringVar(&httpAddr, "http", ":48560", "http address to bind to")
 	flag.StringVar(&httpsAddr, "https", ":48561", "https address to bind to")
@@ -112,7 +127,7 @@ func main() {
 		go wait(&wg, fmt.Sprintf("https://%s/sleep/?duration=1ms", httpsAddr))
 		wg.Wait()
 
-		err = json.NewEncoder(os.Stderr).Encode(&response{Pid: os.Getpid()})
+		err := json.NewEncoder(os.Stderr).Encode(&response{Pid: os.Getpid()})
 		if err != nil {
 			log.Fatalf("Error writing startup json: %s", err)
 		}
