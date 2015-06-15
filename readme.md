@@ -58,4 +58,4 @@ Documentation
 https://godoc.org/github.com/facebookgo/grace/gracehttp
 
 `net.Listener` graceful termination and restart:
-https://godoc.org/github.com/facebookgo/gracenet
+https://godoc.org/github.com/facebookgo/grace/gracenet
