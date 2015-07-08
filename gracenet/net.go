@@ -31,10 +31,11 @@ var originalWD, _ = os.Getwd()
 // Net provides the family of Listen functions and maintains the associated
 // state. Typically you will have only once instance of Net per application.
 type Net struct {
-	inherited   []net.Listener
-	active      []net.Listener
-	mutex       sync.Mutex
-	inheritOnce sync.Once
+	inherited       []net.Listener
+	active          []net.Listener
+	closedListeners []net.Listener
+	mutex           sync.Mutex
+	inheritOnce     sync.Once
 
 	// used in tests to override the default behavior of starting from fd 3.
 	fdStart int
@@ -168,6 +169,13 @@ func (n *Net) ListenUnix(nett string, laddr *net.UnixAddr) (*net.UnixListener, e
 	return l, nil
 }
 
+func (n *Net) Close(l net.Listener) {
+	n.mutex.Lock()
+	defer n.mutex.Unlock()
+	n.closedListeners = append(n.closedListeners, l)
+	l.Close()
+}
+
 // activeListeners returns a snapshot copy of the active listeners.
 func (n *Net) activeListeners() ([]net.Listener, error) {
 	n.mutex.Lock()
@@ -209,14 +217,31 @@ func (n *Net) StartProcess() (int, error) {
 		return 0, err
 	}
 
+	n.mutex.Lock()
+	closedList := make([]net.Addr, len(n.closedListeners))
+	for i, l := range n.closedListeners {
+		closedList[i] = l.Addr()
+	}
+	n.mutex.Unlock()
 	// Extract the fds from the listeners.
-	files := make([]*os.File, len(listeners))
-	for i, l := range listeners {
-		files[i], err = l.(filer).File()
+	files := make([]*os.File, 0, len(listeners)-len(closedList))
+	for _, l := range listeners {
+		is_closed := false
+		for _, closedAddr := range closedList {
+			if isSameAddr(l.Addr(), closedAddr) {
+				is_closed = true
+				break
+			}
+		}
+		if is_closed {
+			continue
+		}
+		f, err := l.(filer).File()
 		if err != nil {
 			return 0, err
 		}
-		defer files[i].Close()
+		files = append(files, f)
+		defer f.Close()
 	}
 
 	// Use the original binary location. This works with symlinks such that if
@@ -233,7 +258,7 @@ func (n *Net) StartProcess() (int, error) {
 			env = append(env, v)
 		}
 	}
-	env = append(env, fmt.Sprintf("%s%d", envCountKeyPrefix, len(listeners)))
+	env = append(env, fmt.Sprintf("%s%d", envCountKeyPrefix, len(files)))
 
 	allFiles := append([]*os.File{os.Stdin, os.Stdout, os.Stderr}, files...)
 	process, err := os.StartProcess(argv0, os.Args, &os.ProcAttr{
