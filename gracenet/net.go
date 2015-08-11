@@ -226,14 +226,14 @@ func (n *Net) StartProcess() (int, error) {
 	// Extract the fds from the listeners.
 	files := make([]*os.File, 0, len(listeners)-len(closedList))
 	for _, l := range listeners {
-		is_closed := false
+		isClosed := false
 		for _, closedAddr := range closedList {
 			if isSameAddr(l.Addr(), closedAddr) {
-				is_closed = true
+				isClosed = true
 				break
 			}
 		}
-		if is_closed {
+		if isClosed {
 			continue
 		}
 		f, err := l.(filer).File()
