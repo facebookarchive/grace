@@ -206,17 +206,7 @@ func isSameAddr(a1, a2 net.Addr) bool {
 	return a1s == a2s
 }
 
-// StartProcess starts a new process passing it the active listeners. It
-// doesn't fork, but starts a new process using the same environment and
-// arguments as when it was originally started. This allows for a newly
-// deployed binary to be started. It returns the pid of the newly started
-// process when successful.
-func (n *Net) StartProcess() (int, error) {
-	listeners, err := n.activeListeners()
-	if err != nil {
-		return 0, err
-	}
-
+func (n *Net) prepareInheriteFiles(listeners []net.Listener) ([]*os.File, error) {
 	n.mutex.Lock()
 	closedList := make([]net.Addr, len(n.closedListeners))
 	for i, l := range n.closedListeners {
@@ -238,12 +228,32 @@ func (n *Net) StartProcess() (int, error) {
 		}
 		f, err := l.(filer).File()
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
 		files = append(files, f)
-		defer f.Close()
+	}
+	return files, nil
+}
+
+// StartProcess starts a new process passing it the active listeners. It
+// doesn't fork, but starts a new process using the same environment and
+// arguments as when it was originally started. This allows for a newly
+// deployed binary to be started. It returns the pid of the newly started
+// process when successful.
+func (n *Net) StartProcess() (int, error) {
+	listeners, err := n.activeListeners()
+	if err != nil {
+		return 0, err
 	}
 
+	// Extract the fds from the listeners.
+	files, err := n.prepareInheriteFiles(listeners)
+	if err != nil {
+		return 0, err
+	}
+	for _, f := range files {
+		defer f.Close()
+	}
 	// Use the original binary location. This works with symlinks such that if
 	// the file it points to has been changed we will use the updated symlink.
 	argv0, err := exec.LookPath(os.Args[0])

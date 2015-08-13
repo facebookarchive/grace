@@ -349,6 +349,78 @@ func TestPortZeroTwice(t *testing.T) {
 	ensure.Nil(t, l2.Close())
 }
 
+func TestPrepareInheriteFiles(t *testing.T) {
+	var n Net
+
+	port1, err := freeport.Get()
+	ensure.Nil(t, err)
+	addr1 := fmt.Sprintf(":%d", port1)
+	l1, err := net.Listen("tcp", addr1)
+	ensure.Nil(t, err)
+
+	port2, err := freeport.Get()
+	ensure.Nil(t, err)
+	addr2 := fmt.Sprintf(":%d", port2)
+	l2, err := net.Listen("tcp", addr2)
+	ensure.Nil(t, err)
+
+	files, err := n.prepareInheriteFiles([]net.Listener{l1, l2})
+	ensure.Nil(t, err)
+	ensure.DeepEqual(t, len(files), 2)
+
+	// assign both to prevent GC from kicking in the finalizer
+	fds := []int{dup(t, int(files[0].Fd())), dup(t, int(files[0].Fd()))}
+	n.fdStart = fds[0]
+	os.Setenv(envCountKey, "2")
+	// Close these after to ensure we get coalaced file descriptors.
+	ensure.Nil(t, l1.Close())
+	ensure.Nil(t, l2.Close())
+
+	ensure.Nil(t, n.inherit())
+	ensure.DeepEqual(t, len(n.inherited), 2)
+}
+
+func TestCloseListener(t *testing.T) {
+	var n Net
+
+	port1, err := freeport.Get()
+	ensure.Nil(t, err)
+	addr1 := fmt.Sprintf(":%d", port1)
+	l1, err := net.Listen("tcp", addr1)
+	ensure.Nil(t, err)
+
+	port2, err := freeport.Get()
+	ensure.Nil(t, err)
+	addr2 := fmt.Sprintf(":%d", port2)
+	l2, err := net.Listen("tcp", addr2)
+	ensure.Nil(t, err)
+
+	// close using the gracenet interface
+	n.Close(l2)
+
+	files, err := n.prepareInheriteFiles([]net.Listener{l1, l2})
+	ensure.Nil(t, err)
+	ensure.DeepEqual(t, len(files), 1)
+
+	// assign both to prevent GC from kicking in the finalizer
+	fds := []int{dup(t, int(files[0].Fd()))}
+	n.fdStart = fds[0]
+	os.Setenv(envCountKey, "1")
+	// Close these after to ensure we get coalaced file descriptors.
+	ensure.Nil(t, l1.Close())
+
+	ensure.Nil(t, n.inherit())
+	ensure.DeepEqual(t, len(n.inherited), 1)
+
+	l1, err = n.Listen("tcp", addr1)
+
+	ensure.Nil(t, err)
+	ensure.DeepEqual(t, len(n.active), 1)
+	ensure.DeepEqual(t, n.inherited[0], nil)
+	ensure.Nil(t, l1.Close())
+	ensure.Nil(t, files[0].Close())
+}
+
 // We dup file descriptors because the os.Files are closed by a finalizer when
 // they are GCed, which interacts badly with the fact that the OS reuses fds,
 // and that we emulating inheriting the fd by it's integer value in our tests.
