@@ -15,7 +15,7 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/facebookgo/grace/gracenet"
+	"github.com/absolute8511/grace/gracenet"
 	"github.com/facebookgo/httpdown"
 )
 
