@@ -1,5 +1,5 @@
-// Package gracehttp provides easy to use graceful restart
-// functionality for HTTP server.
+// +build !windows
+
 package gracehttp
 
 import (
