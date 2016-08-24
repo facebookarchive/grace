@@ -5,7 +5,6 @@ package gracehttp
 import (
 	"bytes"
 	"crypto/tls"
-	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -20,7 +19,6 @@ import (
 )
 
 var (
-	verbose    = flag.Bool("gracehttp.log", true, "Enable logging.")
 	didInherit = os.Getenv("LISTEN_FDS") != ""
 	ppid       = os.Getppid()
 )
