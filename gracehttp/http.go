@@ -52,7 +52,7 @@ func serveFallback(servers ...*http.Server) error {
 	}
 
 	// If any of the server goroutines have failed,
-	// return their errors.
+	// return an error.
 	select {
 	case err := <-errc:
 		return err
