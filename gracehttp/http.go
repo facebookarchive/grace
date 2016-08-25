@@ -22,11 +22,10 @@ var (
 	verbose = flag.Bool("gracehttp.log", true, "Enable logging.")
 )
 
-// serveFallback is a wrapper around the standard ServerAndListen
-// and ServeAndListenTLS methods.
+// serveFallback is a wrapper around the standard Serve function.
 // It is used instead of gracehttp.Serve on Windows
 // as the latter method is *nix specific.
-func serveFallback(servers ...*http.Server) error {
+func serveFallback(servers []*http.Server) error {
 	// Allocate a listener for every of the
 	// input servers.
 	ls, err := listeners(servers, net.Listen)

@@ -26,7 +26,7 @@ func TestServeFallback_IncorrectAddress(t *testing.T) {
 	}
 
 	// Make sure the serveFallback returns an error.
-	if err := serveFallback(ss...); err == nil {
+	if err := serveFallback(ss); err == nil {
 		t.Errorf("Incorrect input server: a non-nil error expected, got %v.", err)
 	}
 }
@@ -49,7 +49,7 @@ func TestServeFallback(t *testing.T) {
 	}
 
 	// Run the serveFallback in a separate goroutine.
-	go func() { serveFallback(ss...) }()
+	go func() { serveFallback(ss) }()
 	<-time.Tick(time.Second * 2) // Wait till everything is started.
 
 	// Access the second server.
