@@ -3,8 +3,6 @@
 package gracehttp
 
 import (
-	"bytes"
-	"crypto/tls"
 	"fmt"
 	"log"
 	"net"
@@ -47,19 +45,9 @@ func newApp(servers []*http.Server) *app {
 	}
 }
 
-func (a *app) listen() error {
-	for _, s := range a.servers {
-		// TODO: default addresses
-		l, err := a.net.Listen("tcp", s.Addr)
-		if err != nil {
-			return err
-		}
-		if s.TLSConfig != nil {
-			l = tls.NewListener(l, s.TLSConfig)
-		}
-		a.listeners = append(a.listeners, l)
-	}
-	return nil
+func (a *app) listen() (err error) {
+	a.listeners, err = listeners(a.servers, a.net.Listen)
+	return
 }
 
 func (a *app) serve() {
@@ -136,8 +124,7 @@ func Serve(servers ...*http.Server) error {
 				log.Printf(msg, pprintAddr(a.listeners), os.Getpid(), ppid)
 			}
 		} else {
-			const msg = "Serving %s with pid %d"
-			log.Printf(msg, pprintAddr(a.listeners), os.Getpid())
+			log.Printf(servingWithPID, pprintAddr(a.listeners), os.Getpid())
 		}
 	}
 
@@ -165,20 +152,8 @@ func Serve(servers ...*http.Server) error {
 		return err
 	case <-waitdone:
 		if *verbose {
-			log.Printf("Exiting pid %d.", os.Getpid())
+			log.Printf(exitingPID, os.Getpid())
 		}
 		return nil
 	}
-}
-
-// Used for pretty printing addresses.
-func pprintAddr(listeners []net.Listener) []byte {
-	var out bytes.Buffer
-	for i, l := range listeners {
-		if i != 0 {
-			fmt.Fprint(&out, ", ")
-		}
-		fmt.Fprint(&out, l.Addr())
-	}
-	return out.Bytes()
 }
