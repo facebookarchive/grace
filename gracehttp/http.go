@@ -15,7 +15,6 @@ import (
 
 const (
 	servingWithPID = "Serving %s with pid %d"
-	exitingPID     = "Exiting pid %d."
 )
 
 var (
@@ -35,14 +34,11 @@ func serveFallback(servers []*http.Server) error {
 
 	if *verbose {
 		log.Printf(servingWithPID, pprintAddr(ls), os.Getpid())
-		defer func() {
-			log.Printf(exitingPID, os.Getpid())
-		}()
 	}
 
 	// Try to start serving every of the servers received
 	// as input arguments.
-	errc := make(chan error, len(servers))
+	errc := make(chan error, 1)
 	for i := 0; i < len(servers); i++ {
 		go func(s *http.Server, l net.Listener) {
 			// Start serving the current server using appropriate listener.
@@ -50,12 +46,8 @@ func serveFallback(servers []*http.Server) error {
 		}(servers[i], ls[i])
 	}
 
-	// If any of the server goroutines have failed,
-	// return an error.
-	select {
-	case err := <-errc:
-		return err
-	}
+	// Return an error as soon as one of the server goroutines fails.
+	return <-errc
 }
 
 // listenFn is a function type. Either net.Listen or gracenet.Net.Listen

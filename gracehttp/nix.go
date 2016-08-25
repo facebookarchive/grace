@@ -152,7 +152,7 @@ func Serve(servers ...*http.Server) error {
 		return err
 	case <-waitdone:
 		if *verbose {
-			log.Printf(exitingPID, os.Getpid())
+			log.Printf("Exiting pid %d.", os.Getpid())
 		}
 		return nil
 	}
