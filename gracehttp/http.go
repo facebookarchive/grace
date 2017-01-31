@@ -28,12 +28,13 @@ type option func(*app)
 
 // An app contains one or more servers and associated configuration.
 type app struct {
-	servers   []*http.Server
-	http      *httpdown.HTTP
-	net       *gracenet.Net
-	listeners []net.Listener
-	sds       []httpdown.Server
-	errors    chan error
+	servers     []*http.Server
+	http        *httpdown.HTTP
+	net         *gracenet.Net
+	listeners   []net.Listener
+	sds         []httpdown.Server
+	startupHook func() error
+	errors      chan error
 }
 
 func newApp(servers []*http.Server) *app {
@@ -44,6 +45,7 @@ func newApp(servers []*http.Server) *app {
 		listeners: make([]net.Listener, 0, len(servers)),
 		sds:       make([]httpdown.Server, 0, len(servers)),
 
+		startupHook: func() error { return nil },
 		// 2x num servers for possible Close or Stop errors + 1 for possible
 		// StartProcess error.
 		errors: make(chan error, 1+(len(servers)*2)),
@@ -110,6 +112,10 @@ func (a *app) signalHandler(wg *sync.WaitGroup) {
 			a.term(wg)
 			return
 		case syscall.SIGUSR2:
+			err := a.startupHook()
+			if err != nil {
+				a.errors <- err
+			}
 			// we only return here if there's an error, otherwise the new process
 			// will send us a TERM when it's ready to trigger the actual shutdown.
 			if _, err := a.net.StartProcess(); err != nil {
@@ -185,6 +191,15 @@ func ServeWithOptions(servers []*http.Server, options ...option) error {
 func Serve(servers ...*http.Server) error {
 	a := newApp(servers)
 	return a.run()
+}
+
+// StartupHook configures a callback to trigger during graceful restart
+// directly before starting the successor process. This allows the current
+// process to release holds on resources that the new process will need.
+func StartupHook(hook func() error) option {
+	return func(a *app) {
+		a.startupHook = hook
+	}
 }
 
 // Used for pretty printing addresses.
