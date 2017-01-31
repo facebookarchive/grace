@@ -24,6 +24,8 @@ var (
 	ppid       = os.Getppid()
 )
 
+type option func(*app)
+
 // An app contains one or more servers and associated configuration.
 type app struct {
 	servers   []*http.Server
@@ -117,11 +119,7 @@ func (a *app) signalHandler(wg *sync.WaitGroup) {
 	}
 }
 
-// Serve will serve the given http.Servers and will monitor for signals
-// allowing for graceful termination (SIGTERM) or restart (SIGUSR2).
-func Serve(servers ...*http.Server) error {
-	a := newApp(servers)
-
+func (a *app) run() error {
 	// Acquire Listeners
 	if err := a.listen(); err != nil {
 		return err
@@ -170,6 +168,23 @@ func Serve(servers ...*http.Server) error {
 		}
 		return nil
 	}
+}
+
+// ServeWithOptions does the same as Serve, but takes a set of options to
+// configure the app struct.
+func ServeWithOptions(servers []*http.Server, options ...option) error {
+	a := newApp(servers)
+	for _, opt := range options {
+		opt(a)
+	}
+	return a.run()
+}
+
+// Serve will serve the given http.Servers and will monitor for signals
+// allowing for graceful termination (SIGTERM) or restart (SIGUSR2).
+func Serve(servers ...*http.Server) error {
+	a := newApp(servers)
+	return a.run()
 }
 
 // Used for pretty printing addresses.
