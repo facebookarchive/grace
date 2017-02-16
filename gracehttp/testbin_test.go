@@ -113,11 +113,6 @@ func testbinMain() {
 		},
 	}
 
-	err := flag.Set("gracehttp.log", "false")
-	if err != nil {
-		log.Fatalf("Error setting gracehttp.log: %s", err)
-	}
-
 	// print json to stderr once we can successfully connect to all three
 	// addresses. the ensures we only print the line once we're ready to serve.
 	go func() {
@@ -133,7 +128,7 @@ func testbinMain() {
 		}
 	}()
 
-	err = gracehttp.Serve(
+	err := gracehttp.Serve(
 		&http.Server{Addr: httpAddr, Handler: newHandler()},
 		httpsServer(httpsAddr),
 	)

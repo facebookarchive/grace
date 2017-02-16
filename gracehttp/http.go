@@ -5,7 +5,6 @@ package gracehttp
 import (
 	"bytes"
 	"crypto/tls"
-	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -20,7 +19,7 @@ import (
 )
 
 var (
-	verbose    = flag.Bool("gracehttp.log", true, "Enable logging.")
+	logger     *log.Logger
 	didInherit = os.Getenv("LISTEN_FDS") != ""
 	ppid       = os.Getppid()
 )
@@ -129,17 +128,17 @@ func Serve(servers ...*http.Server) error {
 	}
 
 	// Some useful logging.
-	if *verbose {
+	if logger != nil {
 		if didInherit {
 			if ppid == 1 {
-				log.Printf("Listening on init activated %s", pprintAddr(a.listeners))
+				logger.Printf("Listening on init activated %s", pprintAddr(a.listeners))
 			} else {
 				const msg = "Graceful handoff of %s with new pid %d and old pid %d"
-				log.Printf(msg, pprintAddr(a.listeners), os.Getpid(), ppid)
+				logger.Printf(msg, pprintAddr(a.listeners), os.Getpid(), ppid)
 			}
 		} else {
 			const msg = "Serving %s with pid %d"
-			log.Printf(msg, pprintAddr(a.listeners), os.Getpid())
+			logger.Printf(msg, pprintAddr(a.listeners), os.Getpid())
 		}
 	}
 
@@ -166,8 +165,8 @@ func Serve(servers ...*http.Server) error {
 		}
 		return err
 	case <-waitdone:
-		if *verbose {
-			log.Printf("Exiting pid %d.", os.Getpid())
+		if logger != nil {
+			logger.Printf("Exiting pid %d.", os.Getpid())
 		}
 		return nil
 	}
@@ -183,4 +182,9 @@ func pprintAddr(listeners []net.Listener) []byte {
 		fmt.Fprint(&out, l.Addr())
 	}
 	return out.Bytes()
+}
+
+// SetLogger sets logger to be able to grab some useful logs
+func SetLogger(l *log.Logger) {
+	logger = l
 }
