@@ -69,10 +69,14 @@ func (a *app) serve() {
 	}
 }
 
-func (a *app) wait() {
+func (a *app) waitUntil(stop chan struct{}) {
 	var wg sync.WaitGroup
+	go func() {
+		<-stop
+		a.term(&wg)
+	}()
 	wg.Add(len(a.sds) * 2) // Wait & Stop
-	go a.signalHandler(&wg)
+	go a.signalHandler(stop)
 	for _, s := range a.sds {
 		go func(s httpdown.Server) {
 			defer wg.Done()
@@ -95,7 +99,7 @@ func (a *app) term(wg *sync.WaitGroup) {
 	}
 }
 
-func (a *app) signalHandler(wg *sync.WaitGroup) {
+func (a *app) signalHandler(stop chan struct{}) {
 	ch := make(chan os.Signal, 10)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM, syscall.SIGUSR2)
 	for {
@@ -105,7 +109,7 @@ func (a *app) signalHandler(wg *sync.WaitGroup) {
 			// this ensures a subsequent INT/TERM will trigger standard go behaviour of
 			// terminating.
 			signal.Stop(ch)
-			a.term(wg)
+			close(stop)
 			return
 		case syscall.SIGUSR2:
 			// we only return here if there's an error, otherwise the new process
@@ -120,6 +124,18 @@ func (a *app) signalHandler(wg *sync.WaitGroup) {
 // Serve will serve the given http.Servers and will monitor for signals
 // allowing for graceful termination (SIGTERM) or restart (SIGUSR2).
 func Serve(servers ...*http.Server) error {
+	return ServeUntil(nil, servers...)
+}
+
+// ServeUntil will serve the given http.Servers and will monitor for signals
+// allowing for graceful termination (SIGTERM), restart (SIGUSR2).
+// If a stop channel is given, the client can close servers using
+// the stop channel.
+func ServeUntil(stop chan struct{}, servers ...*http.Server) error {
+	if stop == nil {
+		stop = make(chan struct{})
+	}
+
 	a := newApp(servers)
 
 	// Acquire Listeners
@@ -155,7 +171,7 @@ func Serve(servers ...*http.Server) error {
 	waitdone := make(chan struct{})
 	go func() {
 		defer close(waitdone)
-		a.wait()
+		a.waitUntil(stop)
 	}()
 
 	select {
