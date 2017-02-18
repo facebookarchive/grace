@@ -16,7 +16,7 @@ import (
 	"github.com/facebookgo/grace/gracehttp"
 )
 
-const STARTUP_HOOK_ENV = "GRACEHTTP_STARTUP_HOOK"
+const preStartProcessEnv = "GRACEHTTP_PRE_START_PROCESS"
 
 func TestMain(m *testing.M) {
 	const (
@@ -143,31 +143,31 @@ func testbinMain() {
 			log.Fatalf("Error in gracehttp.Serve: %s", err)
 		}
 	} else {
-		if testOption == TEST_STARTUP_HOOK {
-			switch os.Getenv(STARTUP_HOOK_ENV) {
+		if testOption == testPreStartProcess {
+			switch os.Getenv(preStartProcessEnv) {
 			case "":
-				err := os.Setenv(STARTUP_HOOK_ENV, "READY")
+				err := os.Setenv(preStartProcessEnv, "READY")
 				if err != nil {
-					log.Fatalf("testbin (first incarnation) could not set %v to 'ready': %v", STARTUP_HOOK_ENV, err)
+					log.Fatalf("testbin (first incarnation) could not set %v to 'ready': %v", preStartProcessEnv, err)
 				}
 			case "FIRED":
 				// all good, reset for next round
-				err := os.Setenv(STARTUP_HOOK_ENV, "READY")
+				err := os.Setenv(preStartProcessEnv, "READY")
 				if err != nil {
-					log.Fatalf("testbin (second incarnation) could not reset %v to 'ready': %v", STARTUP_HOOK_ENV, err)
+					log.Fatalf("testbin (second incarnation) could not reset %v to 'ready': %v", preStartProcessEnv, err)
 				}
 			case "READY":
 				log.Fatalf("failure to update startup hook before new process started")
 			default:
-				log.Fatalf("something strange happened with %v: it ended up as %v, which is not '', 'FIRED', or 'READY'", STARTUP_HOOK_ENV, os.Getenv(STARTUP_HOOK_ENV))
+				log.Fatalf("something strange happened with %v: it ended up as %v, which is not '', 'FIRED', or 'READY'", preStartProcessEnv, os.Getenv(preStartProcessEnv))
 			}
 
 			err := gracehttp.ServeWithOptions(
 				servers,
-				gracehttp.StartupHook(func() error {
-					err := os.Setenv(STARTUP_HOOK_ENV, "FIRED")
+				gracehttp.PreStartProcess(func() error {
+					err := os.Setenv(preStartProcessEnv, "FIRED")
 					if err != nil {
-						log.Fatalf("startup hook could not set %v to 'fired': %v", STARTUP_HOOK_ENV, err)
+						log.Fatalf("startup hook could not set %v to 'fired': %v", preStartProcessEnv, err)
 					}
 					return nil
 				}),

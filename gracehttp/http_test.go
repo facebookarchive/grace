@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	TEST_STARTUP_HOOK = iota
+	testPreStartProcess = iota
 )
 
 // Debug logging.
@@ -266,11 +266,11 @@ func TestComplexAgain(t *testing.T) {
 	h.Wait()
 }
 
-func TestStartupHook(t *testing.T) {
+func TestPreStartProcess(t *testing.T) {
 	t.Parallel()
-	debug("Started TestStartupHook")
+	debug("Started TestPreStartProcess")
 	h := newHarness(t)
-	h.serveOption = TEST_STARTUP_HOOK
+	h.serveOption = testPreStartProcess
 	debug("Initial Start")
 	h.Start()
 	debug("Send Request 1")
@@ -289,11 +289,11 @@ func TestStartupHook(t *testing.T) {
 	h.Wait()
 }
 
-func TestStartupHookAgain(t *testing.T) {
+func TestPreStartProcessAgain(t *testing.T) {
 	t.Parallel()
-	debug("Started TestStartupHookAgain")
+	debug("Started TestPreStartProcessAgain")
 	h := newHarness(t)
-	h.serveOption = TEST_STARTUP_HOOK
+	h.serveOption = testPreStartProcess
 	debug("Initial Start")
 	h.Start()
 	debug("Send Request 1")
