@@ -11,12 +11,17 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strconv"
 	"sync"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/facebookgo/freeport"
+)
+
+const (
+	testPreStartProcess = iota
 )
 
 // Debug logging.
@@ -39,6 +44,7 @@ type harness struct {
 	newProcess        chan bool      // A bool is sent on start/restart.
 	requestCount      int
 	requestCountMutex sync.Mutex
+	serveOption       int
 }
 
 // Find 3 free ports and setup addresses.
@@ -60,7 +66,7 @@ func (h *harness) setupAddr() {
 // Start a fresh server and wait for pid updates on restart.
 func (h *harness) Start() {
 	h.setupAddr()
-	cmd := exec.Command(os.Args[0], "-http", h.httpAddr, "-https", h.httpsAddr)
+	cmd := exec.Command(os.Args[0], "-http", h.httpAddr, "-https", h.httpsAddr, "-testOption", strconv.Itoa(h.serveOption))
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		h.T.Fatal(err)
@@ -209,8 +215,9 @@ func (h *harness) Wait() {
 
 func newHarness(t *testing.T) *harness {
 	return &harness{
-		T:          t,
-		newProcess: make(chan bool),
+		T:           t,
+		newProcess:  make(chan bool),
+		serveOption: -1,
 	}
 }
 
@@ -241,6 +248,52 @@ func TestComplexAgain(t *testing.T) {
 	t.Parallel()
 	debug("Started TestComplex")
 	h := newHarness(t)
+	debug("Initial Start")
+	h.Start()
+	debug("Send Request 1")
+	h.SendRequest()
+	debug("Restart 1")
+	h.Restart()
+	debug("Send Request 2")
+	h.SendRequest()
+	debug("Restart 2")
+	h.Restart()
+	debug("Send Request 3")
+	h.SendRequest()
+	debug("Stopping")
+	h.Stop()
+	debug("Waiting")
+	h.Wait()
+}
+
+func TestPreStartProcess(t *testing.T) {
+	t.Parallel()
+	debug("Started TestPreStartProcess")
+	h := newHarness(t)
+	h.serveOption = testPreStartProcess
+	debug("Initial Start")
+	h.Start()
+	debug("Send Request 1")
+	h.SendRequest()
+	debug("Restart 1")
+	h.Restart()
+	debug("Send Request 2")
+	h.SendRequest()
+	debug("Restart 2")
+	h.Restart()
+	debug("Send Request 3")
+	h.SendRequest()
+	debug("Stopping")
+	h.Stop()
+	debug("Waiting")
+	h.Wait()
+}
+
+func TestPreStartProcessAgain(t *testing.T) {
+	t.Parallel()
+	debug("Started TestPreStartProcessAgain")
+	h := newHarness(t)
+	h.serveOption = testPreStartProcess
 	debug("Initial Start")
 	h.Start()
 	debug("Send Request 1")

@@ -1,6 +1,6 @@
 // Package gracenet provides a family of Listen functions that either open a
 // fresh connection or provide an inherited connection from when the process
-// was started. The behave like their counterparts in the net pacakge, but
+// was started. The behave like their counterparts in the net package, but
 // transparently provide support for graceful restarts without dropping
 // connections. This is provided in a systemd socket activation compatible form
 // to allow using socket activation.
