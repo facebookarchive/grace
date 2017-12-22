@@ -186,6 +186,12 @@ func ServeWithOptions(servers []*http.Server, options ...option) error {
 	return a.run()
 }
 
+func ServeWithNet(servers []*http.Server, grace *gracenet.Net) error {
+	a := newApp(servers)
+	a.net = grace
+	return a.run()
+}
+
 // Serve will serve the given http.Servers and will monitor for signals
 // allowing for graceful termination (SIGTERM) or restart (SIGUSR2).
 func Serve(servers ...*http.Server) error {
