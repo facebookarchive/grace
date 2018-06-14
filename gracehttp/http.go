@@ -16,6 +16,7 @@ import (
 
 	"github.com/facebookgo/grace/gracenet"
 	"github.com/facebookgo/httpdown"
+	"golang.org/x/net/netutil"
 )
 
 var (
@@ -35,6 +36,7 @@ type app struct {
 	sds             []httpdown.Server
 	preStartProcess func() error
 	errors          chan error
+	listenerLimit   int
 }
 
 func newApp(servers []*http.Server) *app {
@@ -46,6 +48,7 @@ func newApp(servers []*http.Server) *app {
 		sds:       make([]httpdown.Server, 0, len(servers)),
 
 		preStartProcess: func() error { return nil },
+		listenerLimit:   0,
 		// 2x num servers for possible Close or Stop errors + 1 for possible
 		// StartProcess error.
 		errors: make(chan error, 1+(len(servers)*2)),
@@ -61,6 +64,9 @@ func (a *app) listen() error {
 		}
 		if s.TLSConfig != nil {
 			l = tls.NewListener(l, s.TLSConfig)
+		}
+		if a.listenerLimit > 0 {
+			l = netutil.LimitListener(l, a.listenerLimit)
 		}
 		a.listeners = append(a.listeners, l)
 	}
@@ -199,6 +205,12 @@ func Serve(servers ...*http.Server) error {
 func PreStartProcess(hook func() error) option {
 	return func(a *app) {
 		a.preStartProcess = hook
+	}
+}
+
+func ListenerLimit(limit int) option {
+	return func(a *app) {
+		a.listenerLimit = limit
 	}
 }
 
