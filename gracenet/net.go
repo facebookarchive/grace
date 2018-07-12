@@ -31,10 +31,11 @@ var originalWD, _ = os.Getwd()
 // Net provides the family of Listen functions and maintains the associated
 // state. Typically you will have only once instance of Net per application.
 type Net struct {
-	inherited   []net.Listener
-	active      []net.Listener
-	mutex       sync.Mutex
-	inheritOnce sync.Once
+	inherited       []net.Listener
+	active          []net.Listener
+	closedListeners []net.Listener
+	mutex           sync.Mutex
+	inheritOnce     sync.Once
 
 	// used in tests to override the default behavior of starting from fd 3.
 	fdStart int
@@ -168,6 +169,13 @@ func (n *Net) ListenUnix(nett string, laddr *net.UnixAddr) (*net.UnixListener, e
 	return l, nil
 }
 
+func (n *Net) Close(l net.Listener) {
+	n.mutex.Lock()
+	defer n.mutex.Unlock()
+	n.closedListeners = append(n.closedListeners, l)
+	l.Close()
+}
+
 // activeListeners returns a snapshot copy of the active listeners.
 func (n *Net) activeListeners() ([]net.Listener, error) {
 	n.mutex.Lock()
@@ -198,6 +206,35 @@ func isSameAddr(a1, a2 net.Addr) bool {
 	return a1s == a2s
 }
 
+func (n *Net) prepareInheriteFiles(listeners []net.Listener) ([]*os.File, error) {
+	n.mutex.Lock()
+	closedList := make([]net.Addr, len(n.closedListeners))
+	for i, l := range n.closedListeners {
+		closedList[i] = l.Addr()
+	}
+	n.mutex.Unlock()
+	// Extract the fds from the listeners.
+	files := make([]*os.File, 0, len(listeners)-len(closedList))
+	for _, l := range listeners {
+		isClosed := false
+		for _, closedAddr := range closedList {
+			if isSameAddr(l.Addr(), closedAddr) {
+				isClosed = true
+				break
+			}
+		}
+		if isClosed {
+			continue
+		}
+		f, err := l.(filer).File()
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, f)
+	}
+	return files, nil
+}
+
 // StartProcess starts a new process passing it the active listeners. It
 // doesn't fork, but starts a new process using the same environment and
 // arguments as when it was originally started. This allows for a newly
@@ -210,15 +247,13 @@ func (n *Net) StartProcess() (int, error) {
 	}
 
 	// Extract the fds from the listeners.
-	files := make([]*os.File, len(listeners))
-	for i, l := range listeners {
-		files[i], err = l.(filer).File()
-		if err != nil {
-			return 0, err
-		}
-		defer files[i].Close()
+	files, err := n.prepareInheriteFiles(listeners)
+	if err != nil {
+		return 0, err
 	}
-
+	for _, f := range files {
+		defer f.Close()
+	}
 	// Use the original binary location. This works with symlinks such that if
 	// the file it points to has been changed we will use the updated symlink.
 	argv0, err := exec.LookPath(os.Args[0])
@@ -233,7 +268,7 @@ func (n *Net) StartProcess() (int, error) {
 			env = append(env, v)
 		}
 	}
-	env = append(env, fmt.Sprintf("%s%d", envCountKeyPrefix, len(listeners)))
+	env = append(env, fmt.Sprintf("%s%d", envCountKeyPrefix, len(files)))
 
 	allFiles := append([]*os.File{os.Stdin, os.Stdout, os.Stderr}, files...)
 	process, err := os.StartProcess(argv0, os.Args, &os.ProcAttr{

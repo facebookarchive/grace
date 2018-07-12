@@ -14,7 +14,7 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/facebookgo/grace/gracenet"
+	"github.com/absolute8511/grace/gracenet"
 	"github.com/facebookgo/httpdown"
 )
 
@@ -183,6 +183,12 @@ func ServeWithOptions(servers []*http.Server, options ...option) error {
 	for _, opt := range options {
 		opt(a)
 	}
+	return a.run()
+}
+
+func ServeWithNet(servers []*http.Server, grace *gracenet.Net) error {
+	a := newApp(servers)
+	a.net = grace
 	return a.run()
 }
 
