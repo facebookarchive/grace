@@ -4,7 +4,7 @@ go:
   - 1.7
 
 before_install:
-  - go get -v github.com/golang/lint/golint
+  - go get -v golang.org/x/lint/golint
 
 install:
   - go install -race -v std
