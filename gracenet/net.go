@@ -49,6 +49,9 @@ func (n *Net) inherit() error {
 		if countStr == "" {
 			return
 		}
+		defer func() {
+			os.Unsetenv(envCountKey)
+		}()
 		count, err := strconv.Atoi(countStr)
 		if err != nil {
 			retErr = fmt.Errorf("found invalid count value: %s=%s", envCountKey, countStr)
