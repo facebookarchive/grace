@@ -62,11 +62,11 @@ func (a *app) listen() error {
 		if err != nil {
 			return err
 		}
-		if s.TLSConfig != nil {
-			l = tls.NewListener(l, s.TLSConfig)
-		}
 		if a.listenerLimit > 0 {
 			l = netutil.LimitListener(l, a.listenerLimit)
+		}
+		if s.TLSConfig != nil {
+			l = tls.NewListener(l, s.TLSConfig)
 		}
 		a.listeners = append(a.listeners, l)
 	}
