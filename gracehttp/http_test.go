@@ -118,7 +118,7 @@ func (h *harness) Restart() {
 	<-h.newProcess
 }
 
-// Graceful termination of the most recent server.
+// Stop: Graceful termination of the most recent server.
 func (h *harness) Stop() {
 	err := h.MostRecentProcess().Signal(syscall.SIGTERM)
 	if err != nil {
@@ -126,7 +126,7 @@ func (h *harness) Stop() {
 	}
 }
 
-// Returns the most recent server process.
+// MostRecentProcess returns the most recent server process.
 func (h *harness) MostRecentProcess() *os.Process {
 	h.ProcessMutex.Lock()
 	defer h.ProcessMutex.Unlock()
@@ -137,7 +137,7 @@ func (h *harness) MostRecentProcess() *os.Process {
 	return h.Process[l-1]
 }
 
-// Get the global request count and increment it.
+// RequestCount gets the global request count and increment it.
 func (h *harness) RequestCount() int {
 	h.requestCountMutex.Lock()
 	defer h.requestCountMutex.Unlock()
@@ -146,7 +146,7 @@ func (h *harness) RequestCount() int {
 	return c
 }
 
-// Helper for sending a single request.
+// SendOne: Helper for sending a single request.
 func (h *harness) SendOne(dialgroup *sync.WaitGroup, url string, pid int) {
 	defer h.RequestWaitGroup.Done()
 	count := h.RequestCount()
@@ -188,7 +188,7 @@ func (h *harness) SendOne(dialgroup *sync.WaitGroup, url string, pid int) {
 	debug("Done %02d pid=%d url=%s", count, pid, url)
 }
 
-// Send test HTTP request.
+// SendRequest: Send test HTTP request.
 func (h *harness) SendRequest() {
 	pid := h.MostRecentProcess().Pid
 	httpFastURL := fmt.Sprintf("http://%s/sleep/?duration=0", h.httpAddr)
@@ -221,7 +221,7 @@ func newHarness(t *testing.T) *harness {
 	}
 }
 
-// The main test case.
+// TestComplex: The main test case.
 func TestComplex(t *testing.T) {
 	t.Parallel()
 	debug("Started TestComplex")
